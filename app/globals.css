@@ -1,0 +1,119 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-1: #05070f;
+  --bg-2: #101329;
+  --bg-3: #1a0f2d;
+  --panel: rgba(14, 18, 35, 0.9);
+  --line: rgba(255, 255, 255, 0.11);
+  --text: #eef7ff;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  color: var(--text);
+  background:
+    radial-gradient(circle at 20% 15%, rgba(98, 243, 255, 0.14), transparent 45%),
+    radial-gradient(circle at 80% 10%, rgba(255, 79, 216, 0.16), transparent 38%),
+    radial-gradient(circle at 50% 100%, rgba(183, 255, 74, 0.08), transparent 40%),
+    linear-gradient(180deg, var(--bg-2), var(--bg-1) 45%, #05060c);
+}
+
+.panel {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0)), var(--panel);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 1rem;
+  backdrop-filter: blur(12px);
+}
+
+.neon-ring {
+  box-shadow:
+    0 0 0 1px rgba(98, 243, 255, 0.2) inset,
+    0 0 24px rgba(98, 243, 255, 0.08),
+    0 0 80px rgba(255, 79, 216, 0.05);
+}
+
+.chip-balance {
+  background: linear-gradient(135deg, rgba(255, 214, 102, 0.2), rgba(255, 79, 216, 0.1));
+  border: 1px solid rgba(255, 214, 102, 0.28);
+}
+
+.btn-press {
+  transition: transform 120ms ease, box-shadow 160ms ease, opacity 160ms ease, background-color 160ms ease;
+}
+
+.btn-press:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+.card-flip {
+  animation: cardFlip 650ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.toast-in {
+  animation: toastIn 240ms ease-out;
+}
+
+.pulse-win {
+  animation: pulseWin 700ms ease-out;
+}
+
+.pulse-loss {
+  animation: pulseLoss 700ms ease-out;
+}
+
+.shine {
+  position: relative;
+  overflow: hidden;
+}
+
+.shine::after {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  transform: translateX(-120%) rotate(18deg);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  animation: shine 4.8s linear infinite;
+}
+
+@keyframes cardFlip {
+  0% { transform: rotateY(0deg) scale(1); }
+  40% { transform: rotateY(90deg) scale(0.98); }
+  100% { transform: rotateY(180deg) scale(1); }
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulseWin {
+  40% { box-shadow: 0 0 32px rgba(140, 255, 157, 0.25); }
+}
+
+@keyframes pulseLoss {
+  40% { box-shadow: 0 0 32px rgba(255, 140, 140, 0.2); }
+}
+
+@keyframes shine {
+  to { transform: translateX(120%) rotate(18deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-flip,
+  .toast-in,
+  .pulse-win,
+  .pulse-loss,
+  .shine::after {
+    animation: none !important;
+  }
+  .btn-press {
+    transition: none;
+  }
+}
