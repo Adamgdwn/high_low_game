@@ -35,7 +35,7 @@ export function ResultBanner({ lastRound }: { lastRound: RoundRecord | null }) {
         </span>
       </div>
       <div className="mt-1 text-xs text-slate-400">
-        {lastRound.choice.toUpperCase()} on {lastRound.current.rank} -> {lastRound.next.rank}
+        {lastRound.choice.toUpperCase()} on {lastRound.current.rank} {"->"} {lastRound.next.rank}
       </div>
     </div>
   );
