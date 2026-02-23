@@ -30,8 +30,17 @@ function tone(freq: number, durationMs: number, type: OscillatorType, volume = 0
 export function playSound(kind: SoundKind, enabled: boolean) {
   if (!enabled) return;
   try {
-    if (kind === "click") tone(320, 70, "square");
-    if (kind === "flip") tone(190, 120, "triangle");
+    // Placeholder chip clank (betting).
+    if (kind === "click") {
+      tone(820, 45, "triangle", 0.02);
+      window.setTimeout(() => tone(1040, 55, "square", 0.018), 18);
+    }
+    // Placeholder card flip/reveal.
+    if (kind === "flip") {
+      tone(240, 55, "triangle", 0.02);
+      window.setTimeout(() => tone(180, 75, "sine", 0.02), 38);
+      window.setTimeout(() => tone(300, 55, "triangle", 0.018), 88);
+    }
     if (kind === "win") {
       tone(440, 120, "sine", 0.04);
       window.setTimeout(() => tone(660, 160, "sine", 0.04), 70);

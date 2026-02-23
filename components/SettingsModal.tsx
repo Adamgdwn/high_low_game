@@ -3,10 +3,12 @@ import type { GameMode } from "@/lib/types";
 interface SettingsModalProps {
   open: boolean;
   mode: GameMode;
+  fairDeckCount: 1 | 2 | 3;
   soundEnabled: boolean;
   reducedMotion: boolean;
   onClose: () => void;
   onModeChange: (mode: GameMode) => void;
+  onFairDeckCountChange: (count: 1 | 2 | 3) => void;
   onSoundChange: (value: boolean) => void;
   onReducedMotionChange: (value: boolean) => void;
 }
@@ -32,10 +34,12 @@ function Toggle({ label, checked, onChange }: { label: string; checked: boolean;
 export function SettingsModal({
   open,
   mode,
+  fairDeckCount,
   soundEnabled,
   reducedMotion,
   onClose,
   onModeChange,
+  onFairDeckCountChange,
   onSoundChange,
   onReducedMotionChange
 }: SettingsModalProps) {
@@ -65,6 +69,28 @@ export function SettingsModal({
               <option value="alwaysLose">Chaos: Always Lose</option>
             </select>
             <p className="mt-2 text-xs text-slate-400">Rigged modes are clearly labeled demos and are not fair gameplay.</p>
+          </div>
+
+          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+            <div className="mb-2 text-sm font-semibold text-slate-100">Fair Mode Decks</div>
+            <div className="grid grid-cols-3 gap-2">
+              {[1, 2, 3].map((count) => (
+                <button
+                  key={count}
+                  type="button"
+                  onClick={() => onFairDeckCountChange(count as 1 | 2 | 3)}
+                  className={`btn-press rounded-xl border px-3 py-2 text-sm font-semibold ${
+                    fairDeckCount === count
+                      ? "border-cyan-300/35 bg-cyan-400/12 text-cyan-100"
+                      : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
+                  }`}
+                  aria-label={`Use ${count} deck${count > 1 ? "s" : ""} in fair mode`}
+                >
+                  {count} Deck{count > 1 ? "s" : ""}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-slate-400">Random Fair mode uses a shoe of 1, 2, or 3 decks.</p>
           </div>
 
           <Toggle label="Sound" checked={soundEnabled} onChange={onSoundChange} />

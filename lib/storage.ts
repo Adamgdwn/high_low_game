@@ -4,10 +4,12 @@ import type { PersistedState } from "@/lib/types";
 export const defaultPersistedState: PersistedState = {
   balance: STARTING_BALANCE,
   mode: "fair",
+  fairDeckCount: 1,
   soundEnabled: true,
   reducedMotion: false,
   streak: 0,
   lastBet: 100,
+  borrowUsed: false,
   welcomeSeen: false,
   debugOpen: false
 };

@@ -3,11 +3,13 @@ import type { BonusConfig, Card, GameMode, PlayerChoice, RoundOutcome, Suit, Tie
 
 const SUITS: Suit[] = ["♠", "♥", "♦", "♣"];
 
-export function createDeck(): Card[] {
+export function createDeck(deckCount = 1): Card[] {
   const deck: Card[] = [];
-  for (const suit of SUITS) {
-    for (let rank = 1; rank <= 13; rank += 1) {
-      deck.push({ id: `${suit}-${rank}`, suit, rank });
+  for (let d = 0; d < deckCount; d += 1) {
+    for (const suit of SUITS) {
+      for (let rank = 1; rank <= 13; rank += 1) {
+        deck.push({ id: `${d}-${suit}-${rank}-${deck.length}`, suit, rank });
+      }
     }
   }
   return deck;
@@ -86,9 +88,10 @@ export function pickNextCard(params: {
   current: Card;
   mode: GameMode;
   choice: PlayerChoice;
+  deckCount?: number;
   rng?: () => number;
 }): PickNextCardResult {
-  const { deck, current, mode, choice, rng = Math.random } = params;
+  const { deck, current, mode, choice, deckCount = 1, rng = Math.random } = params;
 
   if (mode === "fair") {
     const nextCard = pickRandom(deck, rng);
@@ -104,7 +107,7 @@ export function pickNextCard(params: {
 
   // Fallback path is explicit and deterministic in code:
   // reshuffle a fresh deck (minus current card) and try to force the required relation again.
-  const reshuffled = shuffleDeck(removeCard(createDeck(), current.id), rng);
+  const reshuffled = shuffleDeck(removeCard(createDeck(deckCount), current.id), rng);
   const forcedCandidates = reshuffled.filter((c) => (wantsHigher ? c.rank > current.rank : c.rank < current.rank));
   if (forcedCandidates.length) {
     const nextCard = pickRandom(forcedCandidates, rng);

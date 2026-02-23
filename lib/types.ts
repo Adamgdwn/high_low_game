@@ -20,10 +20,12 @@ export interface BonusConfig {
 export interface PersistedState {
   balance: number;
   mode: GameMode;
+  fairDeckCount: 1 | 2 | 3;
   soundEnabled: boolean;
   reducedMotion: boolean;
   streak: number;
   lastBet: number;
+  borrowUsed: boolean;
   welcomeSeen: boolean;
   debugOpen: boolean;
 }
