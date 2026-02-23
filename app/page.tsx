@@ -63,6 +63,7 @@ export default function Page() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [cloudStatus, setCloudStatus] = useState<"local" | "ready" | "loading" | "saving" | "error">(
@@ -419,6 +420,49 @@ export default function Page() {
     addToast("info", `Magic link sent to ${email}`, 2200);
   }
 
+  async function handleEmailPasswordSignIn() {
+    const supabase = supabaseRef.current;
+    const email = authEmail.trim();
+    if (!supabase || !email || !authPassword) return;
+    setAuthBusy(true);
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password: authPassword
+    });
+    setAuthBusy(false);
+    if (error) {
+      addToast("error", error.message || "Sign in failed");
+      setCloudStatus("error");
+      return;
+    }
+    addToast("success", "Signed in", 1400);
+  }
+
+  async function handleCreateAccount() {
+    const supabase = supabaseRef.current;
+    const email = authEmail.trim();
+    if (!supabase || !email || !authPassword) return;
+    setAuthBusy(true);
+    const { error, data } = await supabase.auth.signUp({
+      email,
+      password: authPassword,
+      options: {
+        emailRedirectTo: typeof window !== "undefined" ? window.location.origin : undefined
+      }
+    });
+    setAuthBusy(false);
+    if (error) {
+      addToast("error", error.message || "Create account failed");
+      setCloudStatus("error");
+      return;
+    }
+    if (data.user && !data.session) {
+      addToast("info", "Account created. Check email to confirm, then sign in.", 2600);
+    } else {
+      addToast("success", "Account created and signed in", 1800);
+    }
+  }
+
   async function handleSignOut() {
     const supabase = supabaseRef.current;
     if (!supabase) return;
@@ -599,7 +643,7 @@ export default function Page() {
               </div>
             ) : (
               <div className="space-y-2">
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Magic Link Login</div>
+                <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Sign In / Create Account</div>
                 <div className="flex gap-2">
                   <input
                     type="email"
@@ -609,17 +653,47 @@ export default function Page() {
                     className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-cyan-300"
                     aria-label="Email for magic link login"
                   />
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="password"
+                    value={authPassword}
+                    onChange={(e) => setAuthPassword(e.target.value)}
+                    placeholder="Password (6+ chars)"
+                    className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-cyan-300"
+                    aria-label="Password"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={handleEmailPasswordSignIn}
+                    disabled={authBusy || !authEmail.trim() || !authPassword}
+                    className="btn-press rounded-lg border border-cyan-300/25 bg-cyan-400/10 px-3 py-2 text-xs font-semibold text-cyan-100 hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {authBusy ? "Working…" : "Sign In"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCreateAccount}
+                    disabled={authBusy || !authEmail.trim() || !authPassword}
+                    className="btn-press rounded-lg border border-lime-300/25 bg-lime-400/10 px-3 py-2 text-xs font-semibold text-lime-100 hover:bg-lime-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {authBusy ? "Working…" : "Create Account"}
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 gap-2">
                   <button
                     type="button"
                     onClick={handleSendMagicLink}
                     disabled={authBusy || !authEmail.trim()}
-                    className="btn-press rounded-lg border border-cyan-300/25 bg-cyan-400/10 px-3 py-2 text-xs font-semibold text-cyan-100 hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="btn-press rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-100 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {authBusy ? "Sending…" : "Send Link"}
+                    {authBusy ? "Working…" : "Send Magic Link Instead"}
                   </button>
                 </div>
                 <div className="text-[11px] text-slate-400">
-                  Sign in to sync balance, settings, streak, and borrow usage across devices.
+                  Sign in to sync balance, settings, streak, and borrow usage across devices. Email/password or magic link both work.
                 </div>
               </div>
             )}

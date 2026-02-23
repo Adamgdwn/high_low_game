@@ -1,7 +1,9 @@
 .gradle
+.kotlin
 local.properties
 build
 **/build
+app/release
 captures
 .idea
 *.iml

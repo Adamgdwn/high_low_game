@@ -69,6 +69,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -85,6 +86,8 @@ fun HighLowApp(viewModel: HighLowViewModel) {
     HighLowTheme {
         val snackbarHostState = remember { SnackbarHostState() }
         var settingsOpen by remember { mutableStateOf(false) }
+        var authEmailInput by remember { mutableStateOf(viewModel.authEmail.orEmpty()) }
+        var authPasswordInput by remember { mutableStateOf("") }
 
         LaunchedEffect(viewModel) {
             viewModel.toasts.collectLatest { toast ->
@@ -172,6 +175,20 @@ fun HighLowApp(viewModel: HighLowViewModel) {
                 )
 
                 BalanceCard(balance = viewModel.balance)
+
+                AuthCard(
+                    isConfigured = viewModel.isSupabaseConfigured,
+                    isSignedIn = viewModel.isSignedIn,
+                    signedInEmail = viewModel.authEmail,
+                    authBusy = viewModel.authBusy,
+                    email = authEmailInput,
+                    password = authPasswordInput,
+                    onEmailChange = { authEmailInput = it },
+                    onPasswordChange = { authPasswordInput = it },
+                    onSignIn = { viewModel.signInWithEmailPassword(authEmailInput, authPasswordInput) },
+                    onCreateAccount = { viewModel.createAccountWithEmailPassword(authEmailInput, authPasswordInput) },
+                    onSignOut = viewModel::signOutAccount
+                )
 
                 GameCardsArea(
                     currentCard = viewModel.currentCard,
@@ -573,6 +590,89 @@ private fun QuickHelpCard() {
             Text("Ties are Push (bet returned, streak unchanged)", color = Color.White.copy(alpha = 0.85f))
             Text("Win = +bet profit, Loss = -bet", color = Color.White.copy(alpha = 0.85f))
             Text("Modes: Fair / Demo: Always Win / Chaos: Always Lose", color = Color.White.copy(alpha = 0.85f))
+        }
+    }
+}
+
+@Composable
+private fun AuthCard(
+    isConfigured: Boolean,
+    isSignedIn: Boolean,
+    signedInEmail: String?,
+    authBusy: Boolean,
+    email: String,
+    password: String,
+    onEmailChange: (String) -> Unit,
+    onPasswordChange: (String) -> Unit,
+    onSignIn: () -> Unit,
+    onCreateAccount: () -> Unit,
+    onSignOut: () -> Unit
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.04f)),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
+    ) {
+        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Account", fontWeight = FontWeight.Bold)
+            if (!isConfigured) {
+                Text(
+                    "Supabase auth is not configured for Android yet. Add SUPABASE_URL and SUPABASE_ANON_KEY to android-native/local.properties.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.75f)
+                )
+                return@Column
+            }
+
+            if (isSignedIn) {
+                Text(
+                    "Signed in as ${signedInEmail ?: "player"}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.9f)
+                )
+                OutlinedButton(onClick = onSignOut, enabled = !authBusy) {
+                    Text(if (authBusy) "Working…" else "Sign Out")
+                }
+                return@Column
+            }
+
+            OutlinedTextField(
+                value = email,
+                onValueChange = onEmailChange,
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text("Email") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
+            )
+            OutlinedTextField(
+                value = password,
+                onValueChange = onPasswordChange,
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text("Password (6+ chars)") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                visualTransformation = PasswordVisualTransformation()
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = onSignIn,
+                    enabled = !authBusy && email.isNotBlank() && password.isNotBlank(),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(if (authBusy) "Working…" else "Sign In")
+                }
+                OutlinedButton(
+                    onClick = onCreateAccount,
+                    enabled = !authBusy && email.isNotBlank() && password.isNotBlank(),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(if (authBusy) "Working…" else "Create Account")
+                }
+            }
+            Text(
+                "Use the same email/password as web to share account access across devices.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.7f)
+            )
         }
     }
 }

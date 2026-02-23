@@ -38,6 +38,8 @@ data class PersistedGameState(
     val streak: Int = 0,
     val lastBet: Int = 100,
     val borrowUsed: Boolean = false,
+    val authEmail: String? = null,
+    val authAccessToken: String? = null,
     val welcomeSeen: Boolean = false,
     val debugOpen: Boolean = false
 )

@@ -8,6 +8,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.adamgoodwin.highlow.audio.SoundPlayer
+import com.adamgoodwin.highlow.auth.SupabaseAuthClient
 import com.adamgoodwin.highlow.data.GamePrefs
 import com.adamgoodwin.highlow.game.Card
 import com.adamgoodwin.highlow.game.GameEngine
@@ -27,6 +28,7 @@ import kotlin.math.max
 class HighLowViewModel(app: Application) : AndroidViewModel(app) {
     private val prefs = GamePrefs(app)
     private val soundPlayer = SoundPlayer()
+    private val authClient = SupabaseAuthClient()
 
     private var deck: List<Card> = emptyList()
 
@@ -45,6 +47,12 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
     var bet by mutableStateOf(100)
         private set
     var borrowUsed by mutableStateOf(false)
+        private set
+    var authEmail by mutableStateOf<String?>(null)
+        private set
+    var authAccessToken by mutableStateOf<String?>(null)
+        private set
+    var authBusy by mutableStateOf(false)
         private set
     var welcomeSeen by mutableStateOf(false)
         private set
@@ -94,6 +102,10 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
         get() = balance < GameEngine.minBet
     val canBorrow: Boolean
         get() = needsRecovery && !borrowUsed
+    val isSupabaseConfigured: Boolean
+        get() = authClient.isConfigured()
+    val isSignedIn: Boolean
+        get() = !authAccessToken.isNullOrBlank() && !authEmail.isNullOrBlank()
 
     val lastResultText: String
         get() = when (lastRound?.outcome) {
@@ -182,6 +194,75 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
         phase = GamePhase.READY
         emitToast("House credit added: +5,000 chips (one-time borrow)", ToastKind.INFO)
         persist()
+    }
+
+    fun signInWithEmailPassword(email: String, password: String) {
+        if (authBusy) return
+        val cleanEmail = email.trim()
+        if (cleanEmail.isBlank() || password.isBlank()) {
+            emitToast("Enter email and password", ToastKind.WARNING)
+            return
+        }
+        authBusy = true
+        viewModelScope.launch {
+            val result = authClient.signIn(cleanEmail, password)
+            authBusy = false
+            if (result.success) {
+                authEmail = result.email ?: cleanEmail
+                authAccessToken = result.accessToken
+                emitToast(result.message, ToastKind.SUCCESS)
+                persist()
+            } else {
+                emitToast(result.message, ToastKind.ERROR)
+            }
+        }
+    }
+
+    fun createAccountWithEmailPassword(email: String, password: String) {
+        if (authBusy) return
+        val cleanEmail = email.trim()
+        if (cleanEmail.isBlank() || password.isBlank()) {
+            emitToast("Enter email and password", ToastKind.WARNING)
+            return
+        }
+        authBusy = true
+        viewModelScope.launch {
+            val result = authClient.signUp(cleanEmail, password)
+            authBusy = false
+            if (result.success) {
+                if (!result.email.isNullOrBlank()) authEmail = result.email
+                if (!result.accessToken.isNullOrBlank()) authAccessToken = result.accessToken
+                emitToast(
+                    result.message,
+                    if (result.accessToken.isNullOrBlank()) ToastKind.INFO else ToastKind.SUCCESS
+                )
+                persist()
+            } else {
+                emitToast(result.message, ToastKind.ERROR)
+            }
+        }
+    }
+
+    fun signOutAccount() {
+        val token = authAccessToken
+        if (authBusy || token.isNullOrBlank()) {
+            authAccessToken = null
+            authEmail = null
+            persist()
+            return
+        }
+        authBusy = true
+        viewModelScope.launch {
+            val result = authClient.signOut(token)
+            authBusy = false
+            authAccessToken = null
+            authEmail = null
+            persist()
+            emitToast(
+                if (result.success) "Signed out" else "Signed out locally",
+                ToastKind.INFO
+            )
+        }
     }
 
     fun choose(choice: PlayerChoice) {
@@ -307,6 +388,8 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
         streak = saved.streak
         bet = saved.lastBet
         borrowUsed = saved.borrowUsed
+        authEmail = saved.authEmail
+        authAccessToken = saved.authAccessToken
         welcomeSeen = saved.welcomeSeen
         debugOpen = saved.debugOpen
     }
@@ -322,6 +405,8 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
                 streak = streak,
                 lastBet = bet,
                 borrowUsed = borrowUsed,
+                authEmail = authEmail,
+                authAccessToken = authAccessToken,
                 welcomeSeen = welcomeSeen,
                 debugOpen = debugOpen
             )
