@@ -78,6 +78,16 @@ class SupabaseAuthClient {
         }
     }
 
+    suspend fun sendMagicLink(email: String): AuthResult = withContext(Dispatchers.IO) {
+        if (!isConfigured()) return@withContext AuthResult(false, "Supabase not configured")
+        val body = JSONObject()
+            .put("email", email)
+            .put("create_user", false)
+        val result = postJson("$urlBase/auth/v1/otp", body.toString())
+        if (!result.success) return@withContext result
+        AuthResult(true, "Magic link sent. Check inbox/spam/promotions.", email = email)
+    }
+
     private data class RawJsonResult(val success: Boolean, val message: String)
 
     private fun postJson(url: String, body: String): AuthResult {

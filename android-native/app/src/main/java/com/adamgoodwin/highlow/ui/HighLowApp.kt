@@ -151,6 +151,7 @@ fun HighLowApp(viewModel: HighLowViewModel) {
                     onPasswordChange = { authPasswordInput = it },
                     onSignIn = { viewModel.signInWithEmailPassword(authEmailInput, authPasswordInput) },
                     onCreateAccount = { viewModel.createAccountWithEmailPassword(authEmailInput, authPasswordInput) },
+                    onSendMagicLink = { viewModel.sendMagicLink(authEmailInput) },
                     onClose = { if (!viewModel.authBusy) authSheetOpen = false }
                 )
             }
@@ -734,6 +735,7 @@ private fun AuthSheet(
     onPasswordChange: (String) -> Unit,
     onSignIn: () -> Unit,
     onCreateAccount: () -> Unit,
+    onSendMagicLink: () -> Unit,
     onClose: () -> Unit
 ) {
     Column(
@@ -777,6 +779,13 @@ private fun AuthSheet(
                 enabled = !authBusy && email.isNotBlank() && password.isNotBlank(),
                 modifier = Modifier.weight(1f)
             ) { Text(if (authBusy) "Working…" else "Create Account") }
+        }
+        OutlinedButton(
+            onClick = onSendMagicLink,
+            enabled = !authBusy && email.isNotBlank(),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(if (authBusy) "Working…" else "Resend Confirmation / Send Magic Link")
         }
         Text(
             "If account creation doesn't sign you in immediately, check your email (including spam/promotions) for a confirmation link, then sign in.",

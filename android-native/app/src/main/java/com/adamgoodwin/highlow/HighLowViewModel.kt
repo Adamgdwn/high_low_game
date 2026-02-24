@@ -292,6 +292,21 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun sendMagicLink(email: String) {
+        if (authBusy) return
+        val cleanEmail = email.trim()
+        if (cleanEmail.isBlank()) {
+            emitToast("Enter your email first", ToastKind.WARNING)
+            return
+        }
+        authBusy = true
+        viewModelScope.launch {
+            val result = authClient.sendMagicLink(cleanEmail)
+            authBusy = false
+            emitToast(result.message, if (result.success) ToastKind.INFO else ToastKind.ERROR)
+        }
+    }
+
     fun signOutAccount() {
         val token = authAccessToken
         if (authBusy || token.isNullOrBlank()) {
