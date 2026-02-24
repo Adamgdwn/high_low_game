@@ -26,6 +26,19 @@ import kotlinx.coroutines.launch
 import kotlin.math.max
 
 class HighLowViewModel(app: Application) : AndroidViewModel(app) {
+    private data class SessionGoal(
+        val label: String,
+        val targetLabel: String,
+        val target: Int,
+        val progressOf: (roundsPlayed: Int, wins: Int, streak: Int) -> Int
+    )
+
+    private val sessionGoals = listOf(
+        SessionGoal("Play 10 rounds", "10 rounds", 10) { roundsPlayed, _, _ -> roundsPlayed },
+        SessionGoal("Win 3 hands", "3 wins", 3) { _, wins, _ -> wins },
+        SessionGoal("Reach a 3-win streak", "3 streak", 3) { _, _, currentStreak -> currentStreak }
+    )
+
     private val prefs = GamePrefs(app)
     private val soundPlayer = SoundPlayer()
     private val authClient = SupabaseAuthClient()
@@ -38,7 +51,9 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var fairDeckCount by mutableStateOf(1)
         private set
-    var soundEnabled by mutableStateOf(true)
+    var soundEnabled by mutableStateOf(false)
+        private set
+    var zenMode by mutableStateOf(false)
         private set
     var reducedMotion by mutableStateOf(false)
         private set
@@ -58,6 +73,13 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var debugOpen by mutableStateOf(false)
         private set
+    var sessionRoundsPlayed by mutableStateOf(0)
+        private set
+    var sessionWins by mutableStateOf(0)
+        private set
+    var sessionGoalIndex by mutableStateOf(0)
+        private set
+    private var lastGoalCompletionRound by mutableStateOf(-1)
 
     var currentCard by mutableStateOf<Card?>(null)
         private set
@@ -84,7 +106,7 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
         phase = if (bet >= GameEngine.minBet) GamePhase.READY else GamePhase.IDLE
 
         if (!welcomeSeen) {
-            emitToast("Welcome! Start with 10,000 fake chips.", ToastKind.INFO)
+            emitToast("Welcome. Start with 10,000 chips and take your time.", ToastKind.INFO)
             welcomeSeen = true
             persist()
         }
@@ -102,10 +124,28 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
         get() = balance < GameEngine.minBet
     val canBorrow: Boolean
         get() = needsRecovery && !borrowUsed
+    val hasSessionActivity: Boolean
+        get() = roundHistory.isNotEmpty() || balance != 10_000 || streak > 0 || borrowUsed
     val isSupabaseConfigured: Boolean
         get() = authClient.isConfigured()
     val isSignedIn: Boolean
         get() = !authAccessToken.isNullOrBlank() && !authEmail.isNullOrBlank()
+    val audioEnabled: Boolean
+        get() = soundEnabled && !zenMode
+
+    val activeSessionGoalLabel: String
+        get() = sessionGoals[sessionGoalIndex % sessionGoals.size].label
+    val activeSessionGoalTargetLabel: String
+        get() = sessionGoals[sessionGoalIndex % sessionGoals.size].targetLabel
+    val activeSessionGoalTarget: Int
+        get() = sessionGoals[sessionGoalIndex % sessionGoals.size].target
+    val activeSessionGoalProgress: Int
+        get() {
+            val goal = sessionGoals[sessionGoalIndex % sessionGoals.size]
+            return goal.progressOf(sessionRoundsPlayed, sessionWins, streak).coerceAtMost(goal.target)
+        }
+    val activeSessionGoalPercent: Int
+        get() = ((activeSessionGoalProgress * 100f) / activeSessionGoalTarget).toInt().coerceIn(0, 100)
 
     val lastResultText: String
         get() = when (lastRound?.outcome) {
@@ -116,7 +156,7 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
         }
 
     fun updateBet(value: Int) {
-        soundPlayer.playClick(soundEnabled)
+        soundPlayer.playClick(audioEnabled)
         bet = value.coerceIn(0, max(0, balance))
         if (phase != GamePhase.REVEALING) {
             phase = if (currentCard != null && bet >= GameEngine.minBet) GamePhase.READY else GamePhase.IDLE
@@ -159,6 +199,11 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
         persist()
     }
 
+    fun changeZenMode(value: Boolean) {
+        zenMode = value
+        persist()
+    }
+
     fun changeReducedMotion(value: Boolean) {
         reducedMotion = value
         persist()
@@ -174,6 +219,10 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
         streak = 0
         bet = 100
         borrowUsed = false
+        sessionRoundsPlayed = 0
+        sessionWins = 0
+        sessionGoalIndex = 0
+        lastGoalCompletionRound = -1
         lastRound = null
         revealCard = null
         pendingChoice = null
@@ -280,7 +329,7 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
 
-        soundPlayer.playFlip(soundEnabled)
+        soundPlayer.playFlip(audioEnabled)
         pendingChoice = choice
         phase = GamePhase.CHOICE
 
@@ -306,7 +355,16 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
         phase = GamePhase.REVEALING
 
         viewModelScope.launch {
-            delay(if (reducedMotion) 50 else 700)
+            val revealDelay = when {
+                reducedMotion || zenMode -> 500L
+                else -> 700L
+            }
+            val nextRoundDelay = when {
+                reducedMotion -> 80L
+                zenMode -> 560L
+                else -> 750L
+            }
+            delay(revealDelay)
 
             phase = GamePhase.RESULT
             lastRound = round
@@ -314,27 +372,35 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
             while (roundHistory.size > 12) roundHistory.removeAt(roundHistory.lastIndex)
             balance = nextBalance
             streak = payout.streak
+            sessionRoundsPlayed += 1
+            if (outcome == com.adamgoodwin.highlow.game.RoundOutcome.WIN) {
+                sessionWins += 1
+            }
+            maybeAdvanceMiniGoal()
             persist()
 
             when (outcome) {
                 com.adamgoodwin.highlow.game.RoundOutcome.WIN -> {
-                    soundPlayer.playWin(soundEnabled)
+                    soundPlayer.playWin(audioEnabled)
                     emitToast(
-                        if (payout.bonus > 0) "Big Win! +${payout.profit} (bonus!)" else "Win! +${payout.profit}",
+                        if (payout.bonus > 0) "Nice hit! +${payout.profit} (bonus)" else "Win! +${payout.profit}",
                         ToastKind.SUCCESS
                     )
+                    if (payout.streak in setOf(3, 5, 10)) {
+                        emitToast("Nice run: ${payout.streak}-win streak", ToastKind.INFO)
+                    }
                 }
                 com.adamgoodwin.highlow.game.RoundOutcome.LOSS -> {
-                    soundPlayer.playLoss(soundEnabled)
+                    soundPlayer.playLoss(audioEnabled)
                     emitToast("Ouch! -$bet", ToastKind.ERROR)
                 }
                 com.adamgoodwin.highlow.game.RoundOutcome.PUSH -> {
-                    soundPlayer.playPush(soundEnabled)
-                    emitToast("Push (tie) - bet returned", ToastKind.WARNING)
+                    soundPlayer.playPush(audioEnabled)
+                    emitToast("Push (tie), bet returned", ToastKind.WARNING)
                 }
             }
 
-            delay(if (reducedMotion) 60 else 750)
+            delay(nextRoundDelay)
             startNextRound(pick.deck, nextBalance, next)
         }
     }
@@ -384,6 +450,7 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
         mode = saved.mode
         fairDeckCount = saved.fairDeckCount.coerceIn(1, 3)
         soundEnabled = saved.soundEnabled
+        zenMode = saved.zenMode
         reducedMotion = saved.reducedMotion
         streak = saved.streak
         bet = saved.lastBet
@@ -401,6 +468,7 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
                 mode = mode,
                 fairDeckCount = fairDeckCount,
                 soundEnabled = soundEnabled,
+                zenMode = zenMode,
                 reducedMotion = reducedMotion,
                 streak = streak,
                 lastBet = bet,
@@ -415,5 +483,15 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun emitToast(message: String, kind: ToastKind = ToastKind.INFO) {
         _toasts.tryEmit(UiToast(message, kind))
+    }
+
+    private fun maybeAdvanceMiniGoal() {
+        val goal = sessionGoals[sessionGoalIndex % sessionGoals.size]
+        val progress = goal.progressOf(sessionRoundsPlayed, sessionWins, streak)
+        if (progress < goal.target) return
+        if (lastGoalCompletionRound == sessionRoundsPlayed) return
+        lastGoalCompletionRound = sessionRoundsPlayed
+        emitToast("Mini goal complete: ${goal.label}", ToastKind.INFO)
+        sessionGoalIndex = (sessionGoalIndex + 1) % sessionGoals.size
     }
 }

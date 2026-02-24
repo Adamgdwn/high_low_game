@@ -14,7 +14,8 @@ class GamePrefs(context: Context) {
             balance = prefs.getInt(KEY_BALANCE, 10_000),
             mode = mode,
             fairDeckCount = prefs.getInt(KEY_FAIR_DECK_COUNT, 1).coerceIn(1, 3),
-            soundEnabled = prefs.getBoolean(KEY_SOUND, true),
+            soundEnabled = prefs.getBoolean(KEY_SOUND, false),
+            zenMode = prefs.getBoolean(KEY_ZEN_MODE, false),
             reducedMotion = prefs.getBoolean(KEY_REDUCED_MOTION, false),
             streak = prefs.getInt(KEY_STREAK, 0),
             lastBet = prefs.getInt(KEY_LAST_BET, 100),
@@ -32,6 +33,7 @@ class GamePrefs(context: Context) {
             .putString(KEY_MODE, state.mode.name)
             .putInt(KEY_FAIR_DECK_COUNT, state.fairDeckCount.coerceIn(1, 3))
             .putBoolean(KEY_SOUND, state.soundEnabled)
+            .putBoolean(KEY_ZEN_MODE, state.zenMode)
             .putBoolean(KEY_REDUCED_MOTION, state.reducedMotion)
             .putInt(KEY_STREAK, state.streak)
             .putInt(KEY_LAST_BET, state.lastBet)
@@ -48,6 +50,7 @@ class GamePrefs(context: Context) {
         const val KEY_MODE = "mode"
         const val KEY_FAIR_DECK_COUNT = "fairDeckCount"
         const val KEY_SOUND = "soundEnabled"
+        const val KEY_ZEN_MODE = "zenMode"
         const val KEY_REDUCED_MOTION = "reducedMotion"
         const val KEY_STREAK = "streak"
         const val KEY_LAST_BET = "lastBet"

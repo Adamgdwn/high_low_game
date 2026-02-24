@@ -5,6 +5,7 @@
 
 package com.adamgoodwin.highlow.ui
 
+import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -40,6 +41,7 @@ import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -67,6 +69,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -84,8 +87,10 @@ import kotlinx.coroutines.flow.collectLatest
 @Composable
 fun HighLowApp(viewModel: HighLowViewModel) {
     HighLowTheme {
+        val context = LocalContext.current
         val snackbarHostState = remember { SnackbarHostState() }
         var settingsOpen by remember { mutableStateOf(false) }
+        var authSheetOpen by remember { mutableStateOf(false) }
         var authEmailInput by remember { mutableStateOf(viewModel.authEmail.orEmpty()) }
         var authPasswordInput by remember { mutableStateOf("") }
 
@@ -114,12 +119,32 @@ fun HighLowApp(viewModel: HighLowViewModel) {
                     mode = viewModel.mode,
                     fairDeckCount = viewModel.fairDeckCount,
                     soundEnabled = viewModel.soundEnabled,
+                    zenMode = viewModel.zenMode,
                     reducedMotion = viewModel.reducedMotion,
                     onModeChange = viewModel::changeMode,
                     onFairDeckCountChange = viewModel::changeFairDeckCount,
                     onSoundChange = viewModel::changeSoundEnabled,
+                    onZenModeChange = viewModel::changeZenMode,
                     onReducedMotionChange = viewModel::changeReducedMotion,
                     onClose = { settingsOpen = false }
+                )
+            }
+        }
+
+        if (authSheetOpen && viewModel.isSupabaseConfigured && !viewModel.isSignedIn) {
+            ModalBottomSheet(
+                onDismissRequest = { if (!viewModel.authBusy) authSheetOpen = false },
+                containerColor = MaterialTheme.colorScheme.surface
+            ) {
+                AuthSheet(
+                    authBusy = viewModel.authBusy,
+                    email = authEmailInput,
+                    password = authPasswordInput,
+                    onEmailChange = { authEmailInput = it },
+                    onPasswordChange = { authPasswordInput = it },
+                    onSignIn = { viewModel.signInWithEmailPassword(authEmailInput, authPasswordInput) },
+                    onCreateAccount = { viewModel.createAccountWithEmailPassword(authEmailInput, authPasswordInput) },
+                    onClose = { if (!viewModel.authBusy) authSheetOpen = false }
                 )
             }
         }
@@ -181,20 +206,31 @@ fun HighLowApp(viewModel: HighLowViewModel) {
                     isSignedIn = viewModel.isSignedIn,
                     signedInEmail = viewModel.authEmail,
                     authBusy = viewModel.authBusy,
-                    email = authEmailInput,
-                    password = authPasswordInput,
-                    onEmailChange = { authEmailInput = it },
-                    onPasswordChange = { authPasswordInput = it },
-                    onSignIn = { viewModel.signInWithEmailPassword(authEmailInput, authPasswordInput) },
-                    onCreateAccount = { viewModel.createAccountWithEmailPassword(authEmailInput, authPasswordInput) },
-                    onSignOut = viewModel::signOutAccount
+                    onOpenAuth = { authSheetOpen = true },
+                    onSignOut = viewModel::signOutAccount,
+                    onShare = {
+                        val intent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_SUBJECT, "Try this High / Low game")
+                            putExtra(Intent.EXTRA_TEXT, "Play this Vegas-style High / Low game: https://highlowgame.vercel.app")
+                        }
+                        context.startActivity(Intent.createChooser(intent, "Share app"))
+                    }
+                )
+
+                MiniGoalCard(
+                    label = viewModel.activeSessionGoalLabel,
+                    targetLabel = viewModel.activeSessionGoalTargetLabel,
+                    progress = viewModel.activeSessionGoalProgress,
+                    target = viewModel.activeSessionGoalTarget,
+                    percent = viewModel.activeSessionGoalPercent
                 )
 
                 GameCardsArea(
                     currentCard = viewModel.currentCard,
                     revealCard = viewModel.revealCard,
                     phase = viewModel.phase,
-                    reducedMotion = viewModel.reducedMotion,
+                    reducedMotion = viewModel.reducedMotion || viewModel.zenMode,
                     lastOutcome = viewModel.lastRound?.outcome
                 )
 
@@ -207,7 +243,7 @@ fun HighLowApp(viewModel: HighLowViewModel) {
 
                 if (!viewModel.canPlay) {
                     Text(
-                        "Place a valid bet (minimum 10 chips) to enable HIGH/LOW.",
+                        "Take your time. Place a valid bet (minimum 10 chips) to enable HIGH/LOW.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                     )
@@ -221,15 +257,6 @@ fun HighLowApp(viewModel: HighLowViewModel) {
 
                 ResultBanner(viewModel.lastRound)
 
-                if (viewModel.needsRecovery) {
-                    RecoveryCard(
-                        minBet = GameEngine.minBet,
-                        canBorrow = viewModel.canBorrow,
-                        onBorrow = viewModel::borrowChipsOnce,
-                        onNewGame = viewModel::resetTable
-                    )
-                }
-
                 BetControls(
                     balance = viewModel.balance,
                     bet = viewModel.bet,
@@ -239,6 +266,15 @@ fun HighLowApp(viewModel: HighLowViewModel) {
                     onMax = viewModel::setMaxBet,
                     onClear = viewModel::clearBet
                 )
+
+                if (viewModel.needsRecovery) {
+                    RecoveryCard(
+                        minBet = GameEngine.minBet,
+                        canBorrow = viewModel.canBorrow,
+                        onBorrow = viewModel::borrowChipsOnce,
+                        onNewGame = viewModel::resetTable
+                    )
+                }
 
                 QuickHelpCard()
 
@@ -301,6 +337,36 @@ private fun BalanceCard(balance: Int) {
                 fontSize = 34.sp,
                 color = Color(0xFFFFF3CF)
             )
+        }
+    }
+}
+
+@Composable
+private fun MiniGoalCard(
+    label: String,
+    targetLabel: String,
+    progress: Int,
+    target: Int,
+    percent: Int
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.04f)),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
+    ) {
+        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Mini Goal (Optional)", style = MaterialTheme.typography.labelMedium, color = Color.White.copy(alpha = 0.75f))
+                Text("$progress/$target", style = MaterialTheme.typography.labelMedium, color = Color.White.copy(alpha = 0.75f))
+            }
+            Text(label, fontWeight = FontWeight.SemiBold)
+            Text("A small focus target for a quick mental break.", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.7f))
+            LinearProgressIndicator(
+                progress = { percent / 100f },
+                modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(999.dp)),
+                color = Color(0xFF62F3FF),
+                trackColor = Color.White.copy(alpha = 0.08f)
+            )
+            Text("Target: $targetLabel", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.65f))
         }
     }
 }
@@ -600,13 +666,9 @@ private fun AuthCard(
     isSignedIn: Boolean,
     signedInEmail: String?,
     authBusy: Boolean,
-    email: String,
-    password: String,
-    onEmailChange: (String) -> Unit,
-    onPasswordChange: (String) -> Unit,
-    onSignIn: () -> Unit,
-    onCreateAccount: () -> Unit,
-    onSignOut: () -> Unit
+    onOpenAuth: () -> Unit,
+    onSignOut: () -> Unit,
+    onShare: () -> Unit
 ) {
     Card(
         colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.04f)),
@@ -629,51 +691,87 @@ private fun AuthCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.White.copy(alpha = 0.9f)
                 )
-                OutlinedButton(onClick = onSignOut, enabled = !authBusy) {
-                    Text(if (authBusy) "Working…" else "Sign Out")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(onClick = onShare, modifier = Modifier.weight(1f)) { Text("Share App") }
+                    OutlinedButton(onClick = onSignOut, enabled = !authBusy, modifier = Modifier.weight(1f)) {
+                        Text(if (authBusy) "Working…" else "Log Out")
+                    }
                 }
                 return@Column
             }
 
-            OutlinedTextField(
-                value = email,
-                onValueChange = onEmailChange,
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                label = { Text("Email") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
-            )
-            OutlinedTextField(
-                value = password,
-                onValueChange = onPasswordChange,
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                label = { Text("Password (6+ chars)") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                visualTransformation = PasswordVisualTransformation()
+            Text(
+                "Sign up or log in to sync your game across devices.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.8f)
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                Button(
-                    onClick = onSignIn,
-                    enabled = !authBusy && email.isNotBlank() && password.isNotBlank(),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(if (authBusy) "Working…" else "Sign In")
-                }
-                OutlinedButton(
-                    onClick = onCreateAccount,
-                    enabled = !authBusy && email.isNotBlank() && password.isNotBlank(),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(if (authBusy) "Working…" else "Create Account")
-                }
+                Button(onClick = onOpenAuth, modifier = Modifier.weight(1f)) { Text("Sign Up / Log In") }
+                OutlinedButton(onClick = onShare, modifier = Modifier.weight(1f)) { Text("Share App") }
             }
             Text(
-                "Use the same email/password as web to share account access across devices.",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.7f)
+                "One tap opens email/password sign in and account creation.",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.White.copy(alpha = 0.65f)
             )
         }
+    }
+}
+
+@Composable
+private fun AuthSheet(
+    authBusy: Boolean,
+    email: String,
+    password: String,
+    onEmailChange: (String) -> Unit,
+    onPasswordChange: (String) -> Unit,
+    onSignIn: () -> Unit,
+    onCreateAccount: () -> Unit,
+    onClose: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Column {
+                Text("Sign In / Create Account", fontWeight = FontWeight.Bold)
+                Text("Sync chips, settings, streak, and borrow usage.", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.7f))
+            }
+            TextButton(onClick = onClose, enabled = !authBusy) { Text("Close") }
+        }
+        OutlinedTextField(
+            value = email,
+            onValueChange = onEmailChange,
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            label = { Text("Email") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
+        )
+        OutlinedTextField(
+            value = password,
+            onValueChange = onPasswordChange,
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            label = { Text("Password (6+ chars)") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            visualTransformation = PasswordVisualTransformation()
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            Button(
+                onClick = onSignIn,
+                enabled = !authBusy && email.isNotBlank() && password.isNotBlank(),
+                modifier = Modifier.weight(1f)
+            ) { Text(if (authBusy) "Working…" else "Sign In") }
+            OutlinedButton(
+                onClick = onCreateAccount,
+                enabled = !authBusy && email.isNotBlank() && password.isNotBlank(),
+                modifier = Modifier.weight(1f)
+            ) { Text(if (authBusy) "Working…" else "Create Account") }
+        }
+        Spacer(Modifier.height(8.dp))
     }
 }
 
@@ -770,10 +868,12 @@ private fun SettingsSheet(
     mode: GameMode,
     fairDeckCount: Int,
     soundEnabled: Boolean,
+    zenMode: Boolean,
     reducedMotion: Boolean,
     onModeChange: (GameMode) -> Unit,
     onFairDeckCountChange: (Int) -> Unit,
     onSoundChange: (Boolean) -> Unit,
+    onZenModeChange: (Boolean) -> Unit,
     onReducedMotionChange: (Boolean) -> Unit,
     onClose: () -> Unit
 ) {
@@ -816,7 +916,17 @@ private fun SettingsSheet(
         }
 
         ToggleRow("Sound", soundEnabled, onSoundChange)
+        ToggleRow("Zen mode", zenMode, onZenModeChange)
         ToggleRow("Reduced motion", reducedMotion, onReducedMotionChange)
+
+        Card(colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.04f))) {
+            Text(
+                "Zen mode softens the experience by muting game sounds, reducing motion, and toning down visual intensity.",
+                modifier = Modifier.fillMaxWidth().padding(12.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.8f)
+            )
+        }
 
         Card(colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.04f))) {
             Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -870,3 +980,4 @@ private fun ToggleRow(label: String, checked: Boolean, onChange: (Boolean) -> Un
 }
 
 private fun chips(value: Int): String = "%,d".format(value)
+
