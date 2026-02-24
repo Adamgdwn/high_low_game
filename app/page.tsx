@@ -100,6 +100,7 @@ export default function Page() {
   const [authBusy, setAuthBusy] = useState(false);
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
+  const [authNotice, setAuthNotice] = useState<{ kind: "info" | "error" | "success"; message: string } | null>(null);
   const [sessionRoundsPlayed, setSessionRoundsPlayed] = useState(0);
   const [sessionWins, setSessionWins] = useState(0);
   const [sessionGoalIndex, setSessionGoalIndex] = useState(0);
@@ -348,6 +349,8 @@ export default function Page() {
         const user = session?.user ?? null;
         setAuthUser(user);
         if (event === "SIGNED_IN" && user) {
+          setAuthDialogOpen(false);
+          setAuthNotice(null);
           cloudInitializedRef.current = false;
           addToast("success", `Signed in: ${user.email ?? "player"}`, 1400);
           await loadCloudForUser(user);
@@ -469,6 +472,7 @@ export default function Page() {
     const email = authEmail.trim();
     const supabase = supabaseRef.current;
     if (!supabase || !email) return;
+    setAuthNotice(null);
     setAuthBusy(true);
     const { error } = await supabase.auth.signInWithOtp({
       email,
@@ -478,10 +482,12 @@ export default function Page() {
     });
     setAuthBusy(false);
     if (error) {
+      setAuthNotice({ kind: "error", message: error.message || "Magic link failed" });
       addToast("error", error.message || "Magic link failed");
       setCloudStatus("error");
       return;
     }
+    setAuthNotice({ kind: "info", message: `Magic link sent to ${email}. Check inbox and spam/promotions.` });
     addToast("info", `Magic link sent to ${email}`, 2200);
   }
 
@@ -489,6 +495,7 @@ export default function Page() {
     const supabase = supabaseRef.current;
     const email = authEmail.trim();
     if (!supabase || !email || !authPassword) return;
+    setAuthNotice(null);
     setAuthBusy(true);
     const { error } = await supabase.auth.signInWithPassword({
       email,
@@ -496,11 +503,13 @@ export default function Page() {
     });
     setAuthBusy(false);
     if (error) {
+      setAuthNotice({ kind: "error", message: error.message || "Sign in failed" });
       addToast("error", error.message || "Sign in failed");
       setCloudStatus("error");
       return;
     }
     setAuthDialogOpen(false);
+    setAuthNotice({ kind: "success", message: "Signed in." });
     addToast("success", "Signed in", 1400);
   }
 
@@ -508,6 +517,7 @@ export default function Page() {
     const supabase = supabaseRef.current;
     const email = authEmail.trim();
     if (!supabase || !email || !authPassword) return;
+    setAuthNotice(null);
     setAuthBusy(true);
     const { error, data } = await supabase.auth.signUp({
       email,
@@ -518,14 +528,20 @@ export default function Page() {
     });
     setAuthBusy(false);
     if (error) {
+      setAuthNotice({ kind: "error", message: error.message || "Create account failed" });
       addToast("error", error.message || "Create account failed");
       setCloudStatus("error");
       return;
     }
     if (data.user && !data.session) {
+      setAuthNotice({
+        kind: "info",
+        message: "Account created. Confirmation email should arrive shortly. Check spam/promotions, then click the link and return."
+      });
       addToast("info", "Account created. Check email to confirm, then sign in.", 2600);
     } else {
       setAuthDialogOpen(false);
+      setAuthNotice({ kind: "success", message: "Account created and signed in." });
       addToast("success", "Account created and signed in", 1800);
     }
   }
@@ -752,7 +768,10 @@ export default function Page() {
               <div className="space-y-2">
                 <button
                   type="button"
-                  onClick={() => setAuthDialogOpen(true)}
+                  onClick={() => {
+                    setAuthNotice(null);
+                    setAuthDialogOpen(true);
+                  }}
                   className="w-full text-left text-sm text-slate-200"
                 >
                   <span className="font-semibold text-cyan-100">Sign up or log in</span> to sync your game across devices.
@@ -779,9 +798,10 @@ export default function Page() {
           role="dialog"
           aria-modal="true"
           aria-labelledby="auth-dialog-title"
-          onClick={() => {
-            if (!authBusy) setAuthDialogOpen(false);
-          }}
+                onClick={() => {
+                  setAuthNotice(null);
+                  if (!authBusy) setAuthDialogOpen(false);
+                }}
         >
           <div className="panel w-full max-w-md p-4" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between gap-2">
@@ -803,6 +823,21 @@ export default function Page() {
             </div>
 
             <div className="space-y-2">
+              {authNotice && (
+                <div
+                  className={`rounded-lg border px-3 py-2 text-xs ${
+                    authNotice.kind === "error"
+                      ? "border-rose-300/25 bg-rose-400/10 text-rose-100"
+                      : authNotice.kind === "success"
+                        ? "border-emerald-300/25 bg-emerald-400/10 text-emerald-100"
+                        : "border-cyan-300/25 bg-cyan-400/10 text-cyan-100"
+                  }`}
+                  role="status"
+                  aria-live="polite"
+                >
+                  {authNotice.message}
+                </div>
+              )}
               <div className="flex gap-2">
                 <input
                   type="email"

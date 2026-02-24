@@ -110,6 +110,13 @@ fun HighLowApp(viewModel: HighLowViewModel) {
             }
         }
 
+        LaunchedEffect(viewModel.isSignedIn) {
+            if (viewModel.isSignedIn) {
+                authSheetOpen = false
+                authPasswordInput = ""
+            }
+        }
+
         if (settingsOpen) {
             ModalBottomSheet(
                 onDismissRequest = { settingsOpen = false },
@@ -771,6 +778,11 @@ private fun AuthSheet(
                 modifier = Modifier.weight(1f)
             ) { Text(if (authBusy) "Working…" else "Create Account") }
         }
+        Text(
+            "If account creation doesn't sign you in immediately, check your email (including spam/promotions) for a confirmation link, then sign in.",
+            style = MaterialTheme.typography.labelSmall,
+            color = Color.White.copy(alpha = 0.65f)
+        )
         Spacer(Modifier.height(8.dp))
     }
 }
