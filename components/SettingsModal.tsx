@@ -5,11 +5,13 @@ interface SettingsModalProps {
   mode: GameMode;
   fairDeckCount: 1 | 2 | 3;
   soundEnabled: boolean;
+  zenMode: boolean;
   reducedMotion: boolean;
   onClose: () => void;
   onModeChange: (mode: GameMode) => void;
   onFairDeckCountChange: (count: 1 | 2 | 3) => void;
   onSoundChange: (value: boolean) => void;
+  onZenModeChange: (value: boolean) => void;
   onReducedMotionChange: (value: boolean) => void;
 }
 
@@ -36,11 +38,13 @@ export function SettingsModal({
   mode,
   fairDeckCount,
   soundEnabled,
+  zenMode,
   reducedMotion,
   onClose,
   onModeChange,
   onFairDeckCountChange,
   onSoundChange,
+  onZenModeChange,
   onReducedMotionChange
 }: SettingsModalProps) {
   if (!open) return null;
@@ -94,7 +98,12 @@ export function SettingsModal({
           </div>
 
           <Toggle label="Sound" checked={soundEnabled} onChange={onSoundChange} />
+          <Toggle label="Zen mode" checked={zenMode} onChange={onZenModeChange} />
           <Toggle label="Reduced motion" checked={reducedMotion} onChange={onReducedMotionChange} />
+
+          <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-slate-300">
+            Zen mode softens the experience by muting game sounds, reducing motion, and toning down visual intensity.
+          </div>
 
           <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-xs leading-5 text-slate-300">
             <div className="mb-2 font-semibold text-slate-100">Rules</div>

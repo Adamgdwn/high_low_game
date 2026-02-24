@@ -37,6 +37,38 @@ function normalizeBet(raw: number, balance: number) {
   return clamp(Math.floor(raw), 0, Math.max(0, balance));
 }
 
+type SessionGoalId = "play10" | "win3" | "streak3";
+
+const SESSION_GOALS: Array<{
+  id: SessionGoalId;
+  label: string;
+  targetLabel: string;
+  progress: (input: { roundsPlayed: number; wins: number; streak: number }) => number;
+  target: number;
+}> = [
+  {
+    id: "play10",
+    label: "Play 10 rounds",
+    targetLabel: "10 rounds",
+    progress: ({ roundsPlayed }) => roundsPlayed,
+    target: 10
+  },
+  {
+    id: "win3",
+    label: "Win 3 hands",
+    targetLabel: "3 wins",
+    progress: ({ wins }) => wins,
+    target: 3
+  },
+  {
+    id: "streak3",
+    label: "Reach a 3-win streak",
+    targetLabel: "3 streak",
+    progress: ({ streak }) => streak,
+    target: 3
+  }
+];
+
 export default function Page() {
   const systemReduced = usePrefersReducedMotion();
 
@@ -44,7 +76,8 @@ export default function Page() {
   const [balance, setBalance] = useState(STARTING_BALANCE);
   const [mode, setMode] = useState<GameMode>("fair");
   const [fairDeckCount, setFairDeckCount] = useState<1 | 2 | 3>(1);
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(false);
+  const [zenMode, setZenMode] = useState(false);
   const [reducedMotionManual, setReducedMotionManual] = useState(false);
   const [streak, setStreak] = useState(0);
   const [bet, setBet] = useState(100);
@@ -66,11 +99,17 @@ export default function Page() {
   const [authPassword, setAuthPassword] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
   const [authUser, setAuthUser] = useState<User | null>(null);
+  const [authDialogOpen, setAuthDialogOpen] = useState(false);
+  const [sessionRoundsPlayed, setSessionRoundsPlayed] = useState(0);
+  const [sessionWins, setSessionWins] = useState(0);
+  const [sessionGoalIndex, setSessionGoalIndex] = useState(0);
+  const [lastGoalCompletionRound, setLastGoalCompletionRound] = useState(-1);
   const [cloudStatus, setCloudStatus] = useState<"local" | "ready" | "loading" | "saving" | "error">(
     isSupabaseConfigured() ? "ready" : "local"
   );
 
-  const reducedMotion = reducedMotionManual || systemReduced;
+  const reducedMotion = reducedMotionManual || systemReduced || zenMode;
+  const audioEnabled = soundEnabled && !zenMode;
   const timers = useRef<number[]>([]);
   const latestBalanceRef = useRef(balance);
   const supabaseRef = useRef<SupabaseClient | null>(null);
@@ -90,6 +129,14 @@ export default function Page() {
   const canChooseLow = canPlay && currentCard?.rank !== 1;
   const needsRecovery = balance < MIN_BET;
   const canBorrow = needsRecovery && !borrowUsed;
+  const hasSessionActivity = history.length > 0 || balance !== STARTING_BALANCE || streak > 0 || borrowUsed;
+  const activeSessionGoal = SESSION_GOALS[sessionGoalIndex % SESSION_GOALS.length];
+  const activeSessionGoalProgress = Math.min(
+    activeSessionGoal.target,
+    activeSessionGoal.progress({ roundsPlayed: sessionRoundsPlayed, wins: sessionWins, streak })
+  );
+  const activeSessionGoalComplete = activeSessionGoalProgress >= activeSessionGoal.target;
+  const activeSessionGoalPct = Math.round((activeSessionGoalProgress / activeSessionGoal.target) * 100);
 
   const lastResultText = lastRound
     ? lastRound.outcome === "win"
@@ -122,6 +169,7 @@ export default function Page() {
       mode,
       fairDeckCount,
       soundEnabled,
+      zenMode,
       reducedMotion: reducedMotionManual,
       streak,
       lastBet: bet,
@@ -136,12 +184,17 @@ export default function Page() {
     setMode(snapshot.mode);
     setFairDeckCount(snapshot.fairDeckCount);
     setSoundEnabled(snapshot.soundEnabled);
+    setZenMode(snapshot.zenMode);
     setReducedMotionManual(snapshot.reducedMotion);
     setStreak(snapshot.streak);
     setBet(snapshot.lastBet);
     setBorrowUsed(snapshot.borrowUsed);
     setWelcomeSeen(snapshot.welcomeSeen);
     setDebugOpen(snapshot.debugOpen);
+    setSessionRoundsPlayed(0);
+    setSessionWins(0);
+    setSessionGoalIndex(0);
+    setLastGoalCompletionRound(-1);
 
     const fresh = shuffleDeck(createDeck(snapshot.fairDeckCount));
     const start = drawCurrentCard({ deck: fresh, mode: snapshot.mode });
@@ -179,6 +232,7 @@ export default function Page() {
     setMode(saved.mode);
     setFairDeckCount(saved.fairDeckCount);
     setSoundEnabled(saved.soundEnabled);
+    setZenMode(saved.zenMode);
     setReducedMotionManual(saved.reducedMotion);
     setStreak(saved.streak);
     setBet(saved.lastBet);
@@ -204,6 +258,7 @@ export default function Page() {
       mode,
       fairDeckCount,
       soundEnabled,
+      zenMode,
       reducedMotion: reducedMotionManual,
       streak,
       lastBet: bet,
@@ -211,13 +266,22 @@ export default function Page() {
       welcomeSeen,
       debugOpen
     });
-  }, [hydrated, balance, mode, fairDeckCount, soundEnabled, reducedMotionManual, streak, bet, borrowUsed, welcomeSeen, debugOpen]);
+  }, [hydrated, balance, mode, fairDeckCount, soundEnabled, zenMode, reducedMotionManual, streak, bet, borrowUsed, welcomeSeen, debugOpen]);
 
   useEffect(() => {
     if (!hydrated || welcomeSeen) return;
-    addToast("info", "Welcome! Start with 10,000 fake chips.", 2600);
+    addToast("info", "Welcome. Start with 10,000 chips and take your time.", 2600);
     setWelcomeSeen(true);
   }, [hydrated, welcomeSeen]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    if (!activeSessionGoalComplete) return;
+    if (lastGoalCompletionRound === sessionRoundsPlayed) return;
+    addToast("info", `Mini goal complete: ${activeSessionGoal.label}`, 1800);
+    setLastGoalCompletionRound(sessionRoundsPlayed);
+    setSessionGoalIndex((prev) => (prev + 1) % SESSION_GOALS.length);
+  }, [hydrated, activeSessionGoalComplete, activeSessionGoal.label, lastGoalCompletionRound, sessionRoundsPlayed]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -335,6 +399,7 @@ export default function Page() {
     mode,
     fairDeckCount,
     soundEnabled,
+    zenMode,
     reducedMotionManual,
     streak,
     bet,
@@ -363,10 +428,10 @@ export default function Page() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [hydrated, settingsOpen, canPlay, canChooseHigh, canChooseLow, currentCard, deck, mode, bet, balance, streak, phase, reducedMotion, soundEnabled]);
+  }, [hydrated, settingsOpen, canPlay, canChooseHigh, canChooseLow, currentCard, deck, mode, bet, balance, streak, phase, reducedMotion, audioEnabled, zenMode]);
 
   function handleSetBet(value: number) {
-    playSound("click", soundEnabled);
+    playSound("click", audioEnabled);
     const next = normalizeBet(value, balance);
     setBet(next);
     setPhaseByBet(next);
@@ -435,6 +500,7 @@ export default function Page() {
       setCloudStatus("error");
       return;
     }
+    setAuthDialogOpen(false);
     addToast("success", "Signed in", 1400);
   }
 
@@ -459,6 +525,7 @@ export default function Page() {
     if (data.user && !data.session) {
       addToast("info", "Account created. Check email to confirm, then sign in.", 2600);
     } else {
+      setAuthDialogOpen(false);
       addToast("success", "Account created and signed in", 1800);
     }
   }
@@ -469,6 +536,13 @@ export default function Page() {
     setAuthBusy(true);
     await supabase.auth.signOut();
     setAuthBusy(false);
+  }
+
+  function handleShareByEmail() {
+    if (typeof window === "undefined") return;
+    const subject = "Try this High / Low game";
+    const body = `Play this Vegas-style High / Low game: ${window.location.href}`;
+    window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   }
 
   function handleBorrowChips() {
@@ -486,6 +560,10 @@ export default function Page() {
     setStreak(0);
     setBet(100);
     setBorrowUsed(false);
+    setSessionRoundsPlayed(0);
+    setSessionWins(0);
+    setSessionGoalIndex(0);
+    setLastGoalCompletionRound(-1);
     const fresh = shuffleDeck(createDeck(fairDeckCount));
     const start = drawCurrentCard({ deck: fresh, mode });
     setDeck(start.deck);
@@ -497,6 +575,18 @@ export default function Page() {
     setHistory([]);
     setPhase("ready");
     addToast("info", "New game started", 1200);
+  }
+
+  function handleResetGameTable() {
+    if (!hasSessionActivity) {
+      resetGameTable();
+      return;
+    }
+    if (typeof window !== "undefined") {
+      const confirmed = window.confirm("Start a new game and clear this session's table progress?");
+      if (!confirmed) return;
+    }
+    resetGameTable();
   }
 
   function startNextRound(workingDeck: Card[], nextBalance: number, nextCurrentCard: Card) {
@@ -525,7 +615,7 @@ export default function Page() {
       return;
     }
 
-    playSound("flip", soundEnabled);
+    playSound("flip", audioEnabled);
     setPendingChoice(choice);
     setPhase("choice");
 
@@ -554,6 +644,9 @@ export default function Page() {
     setIsRevealing(true);
     setPhase("revealing");
 
+    const revealDelay = reducedMotion ? 20 : zenMode ? 520 : 480;
+    const nextRoundDelay = reducedMotion ? 40 : zenMode ? 560 : 420;
+
     schedule(() => {
       setIsRevealing(false);
       setPhase("result");
@@ -561,22 +654,27 @@ export default function Page() {
       setHistory((prev) => [round, ...prev].slice(0, 12));
       setBalance(nextBalance);
       setStreak(payout.streak);
+      setSessionRoundsPlayed((prev) => prev + 1);
+      if (outcome === "win") setSessionWins((prev) => prev + 1);
 
       if (outcome === "win") {
-        playSound("win", soundEnabled);
-        addToast("success", payout.bonus > 0 ? `Big Win! +${formatChips(payout.profit)} (bonus!)` : `Win! +${formatChips(payout.profit)}`);
+        playSound("win", audioEnabled);
+        addToast("success", payout.bonus > 0 ? `Nice hit! +${formatChips(payout.profit)} (bonus)` : `Win! +${formatChips(payout.profit)}`);
+        if ([3, 5, 10].includes(payout.streak)) {
+          addToast("info", `Nice run: ${payout.streak}-win streak`, 1500);
+        }
       } else if (outcome === "loss") {
-        playSound("loss", soundEnabled);
+        playSound("loss", audioEnabled);
         addToast("error", `Ouch! -${formatChips(bet)}`);
       } else {
-        playSound("push", soundEnabled);
-        addToast("warning", "Push (tie) - bet returned");
+        playSound("push", audioEnabled);
+        addToast("warning", "Push (tie), bet returned");
       }
 
       schedule(() => {
         startNextRound(pick.deck, nextBalance, nextCard);
-      }, reducedMotion ? 50 : 700);
-    }, reducedMotion ? 30 : 650);
+      }, nextRoundDelay);
+    }, revealDelay);
   }
 
   if (!hydrated) {
@@ -632,74 +730,134 @@ export default function Page() {
                     Cloud: {cloudStatus === "saving" ? "Saving…" : cloudStatus === "loading" ? "Loading…" : cloudStatus}
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleSignOut}
-                  disabled={authBusy}
-                  className="btn-press rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-100 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  Sign Out
-                </button>
+                <div className="flex flex-wrap justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={handleShareByEmail}
+                    className="btn-press rounded-lg border border-cyan-300/25 bg-cyan-400/10 px-3 py-2 text-xs font-semibold text-cyan-100 hover:bg-cyan-400/15"
+                  >
+                    Share this app with a friend
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSignOut}
+                    disabled={authBusy}
+                    className="btn-press rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-100 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {authBusy ? "Working…" : "Log Out"}
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="space-y-2">
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Sign In / Create Account</div>
-                <div className="flex gap-2">
-                  <input
-                    type="email"
-                    value={authEmail}
-                    onChange={(e) => setAuthEmail(e.target.value)}
-                    placeholder="you@example.com"
-                    className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-cyan-300"
-                    aria-label="Email for magic link login"
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <input
-                    type="password"
-                    value={authPassword}
-                    onChange={(e) => setAuthPassword(e.target.value)}
-                    placeholder="Password (6+ chars)"
-                    className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-cyan-300"
-                    aria-label="Password"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={handleEmailPasswordSignIn}
-                    disabled={authBusy || !authEmail.trim() || !authPassword}
-                    className="btn-press rounded-lg border border-cyan-300/25 bg-cyan-400/10 px-3 py-2 text-xs font-semibold text-cyan-100 hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {authBusy ? "Working…" : "Sign In"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleCreateAccount}
-                    disabled={authBusy || !authEmail.trim() || !authPassword}
-                    className="btn-press rounded-lg border border-lime-300/25 bg-lime-400/10 px-3 py-2 text-xs font-semibold text-lime-100 hover:bg-lime-400/15 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {authBusy ? "Working…" : "Create Account"}
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 gap-2">
-                  <button
-                    type="button"
-                    onClick={handleSendMagicLink}
-                    disabled={authBusy || !authEmail.trim()}
-                    className="btn-press rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-100 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {authBusy ? "Working…" : "Send Magic Link Instead"}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setAuthDialogOpen(true)}
+                  className="w-full text-left text-sm text-slate-200"
+                >
+                  <span className="font-semibold text-cyan-100">Sign up or log in</span> to sync your game across devices.
+                </button>
                 <div className="text-[11px] text-slate-400">
-                  Sign in to sync balance, settings, streak, and borrow usage across devices. Email/password or magic link both work.
+                  One tap opens email/password or magic-link sign in.
                 </div>
+                <button
+                  type="button"
+                  onClick={handleShareByEmail}
+                  className="btn-press w-full rounded-lg border border-cyan-300/25 bg-cyan-400/10 px-3 py-2 text-xs font-semibold text-cyan-100 hover:bg-cyan-400/15"
+                >
+                  Share this app with a friend
+                </button>
               </div>
             )}
           </div>
         </div>
       </header>
+
+      {isSupabaseConfigured() && !authUser && authDialogOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="auth-dialog-title"
+          onClick={() => {
+            if (!authBusy) setAuthDialogOpen(false);
+          }}
+        >
+          <div className="panel w-full max-w-md p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <div>
+                <div id="auth-dialog-title" className="text-sm font-semibold text-slate-100">
+                  Sign In / Create Account
+                </div>
+                <div className="text-xs text-slate-400">Sync chips, settings, streak, and borrow usage.</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAuthDialogOpen(false)}
+                disabled={authBusy}
+                className="btn-press rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs font-semibold text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                aria-label="Close sign in dialog"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  value={authEmail}
+                  onChange={(e) => setAuthEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-cyan-300"
+                  aria-label="Email for sign in"
+                />
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="password"
+                  value={authPassword}
+                  onChange={(e) => setAuthPassword(e.target.value)}
+                  placeholder="Password (6+ chars)"
+                  className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-cyan-300"
+                  aria-label="Password"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={handleEmailPasswordSignIn}
+                  disabled={authBusy || !authEmail.trim() || !authPassword}
+                  className="btn-press rounded-lg border border-cyan-300/25 bg-cyan-400/10 px-3 py-2 text-xs font-semibold text-cyan-100 hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {authBusy ? "Working…" : "Sign In"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCreateAccount}
+                  disabled={authBusy || !authEmail.trim() || !authPassword}
+                  className="btn-press rounded-lg border border-lime-300/25 bg-lime-400/10 px-3 py-2 text-xs font-semibold text-lime-100 hover:bg-lime-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {authBusy ? "Working…" : "Create Account"}
+                </button>
+              </div>
+              <div className="grid grid-cols-1 gap-2">
+                <button
+                  type="button"
+                  onClick={handleSendMagicLink}
+                  disabled={authBusy || !authEmail.trim()}
+                  className="btn-press rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-100 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {authBusy ? "Working…" : "Send Magic Link Instead"}
+                </button>
+              </div>
+              <div className="text-[11px] text-slate-400">
+                Email/password or magic link both work. Click outside the dialog to close it.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[1.1fr_.9fr]">
         <GameBoard
@@ -717,6 +875,8 @@ export default function Page() {
           canChooseLow={canChooseLow}
           isRevealing={isRevealing}
           reducedMotion={reducedMotion}
+          zenMode={zenMode}
+          showFirstMoveHint={history.length === 0}
           onChoose={handleChoose}
         />
 
@@ -724,7 +884,24 @@ export default function Page() {
           <BetControls balance={balance} bet={bet} onSetBet={handleSetBet} onAddBet={handleAddBet} />
 
           <section className="panel p-4">
-            <div className="mb-2 text-xs uppercase tracking-[0.24em] text-slate-400">Quick Help</div>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div className="text-xs uppercase tracking-[0.24em] text-slate-400">Mini Goal (Optional)</div>
+              <div className="text-xs text-slate-400">{activeSessionGoalProgress}/{activeSessionGoal.target}</div>
+            </div>
+            <div className="text-sm font-semibold text-slate-100">{activeSessionGoal.label}</div>
+            <div className="mt-1 text-xs text-slate-400">A small focus target for a quick mental break.</div>
+            <div className="mt-3 h-2 overflow-hidden rounded-full border border-white/10 bg-white/5">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-cyan-300/70 to-lime-300/70 transition-[width]"
+                style={{ width: `${activeSessionGoalPct}%` }}
+                aria-hidden="true"
+              />
+            </div>
+            <div className="mt-2 text-[11px] text-slate-400">Target: {activeSessionGoal.targetLabel}</div>
+          </section>
+
+          <section className="panel p-4">
+            <div className="mb-2 text-xs uppercase tracking-[0.24em] text-slate-400">Quick Guide</div>
             <ul className="space-y-1 text-sm text-slate-300">
               <li>Arrow Up / H = HIGH</li>
               <li>Arrow Down / L = LOW</li>
@@ -756,7 +933,7 @@ export default function Page() {
                 </button>
                 <button
                   type="button"
-                  onClick={resetGameTable}
+                  onClick={handleResetGameTable}
                   className="btn-press rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-slate-100 hover:bg-white/10"
                 >
                   New Game
@@ -771,7 +948,7 @@ export default function Page() {
                 <div className="text-xs uppercase tracking-[0.24em] text-slate-400">Debug Panel</div>
                 <button
                   type="button"
-                  onClick={resetGameTable}
+                  onClick={handleResetGameTable}
                   className="btn-press rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs hover:bg-white/10"
                 >
                   Reset Table
@@ -809,13 +986,16 @@ export default function Page() {
         mode={mode}
         fairDeckCount={fairDeckCount}
         soundEnabled={soundEnabled}
+        zenMode={zenMode}
         reducedMotion={reducedMotionManual}
         onClose={() => setSettingsOpen(false)}
         onModeChange={handleModeChange}
         onFairDeckCountChange={handleFairDeckCountChange}
         onSoundChange={setSoundEnabled}
+        onZenModeChange={setZenMode}
         onReducedMotionChange={setReducedMotionManual}
       />
     </main>
   );
 }
+

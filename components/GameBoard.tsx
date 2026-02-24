@@ -18,18 +18,30 @@ interface GameBoardProps {
   canChooseLow: boolean;
   isRevealing: boolean;
   reducedMotion: boolean;
+  zenMode: boolean;
+  showFirstMoveHint: boolean;
   onChoose: (choice: PlayerChoice) => void;
 }
 
-function CardFace({ card, hidden, accent }: { card: Card | null; hidden?: boolean; accent?: "win" | "loss" }) {
+function CardFace({
+  card,
+  hidden,
+  accent,
+  zenMode
+}: {
+  card: Card | null;
+  hidden?: boolean;
+  accent?: "win" | "loss";
+  zenMode?: boolean;
+}) {
   const isRed = card?.suit === "♥" || card?.suit === "♦";
   return (
     <div
       className={cn(
         "relative grid h-48 w-full place-items-center rounded-2xl border bg-gradient-to-b from-white/10 to-white/5 p-4 sm:h-56",
         hidden ? "border-cyan-300/20" : "border-white/15",
-        accent === "win" && "shadow-neon",
-        accent === "loss" && "shadow-pink"
+        !zenMode && accent === "win" && "shadow-neon",
+        !zenMode && accent === "loss" && "shadow-pink"
       )}
     >
       {hidden ? (
@@ -64,11 +76,13 @@ export function GameBoard({
   canChooseLow,
   isRevealing,
   reducedMotion,
+  zenMode,
+  showFirstMoveHint,
   onChoose
 }: GameBoardProps) {
   return (
     <section className="space-y-4">
-      <div className="panel neon-ring p-4 sm:p-5">
+      <div className={cn("panel p-4 sm:p-5", !zenMode && "neon-ring")}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="chip-balance rounded-2xl px-4 py-3">
             <div className="text-xs uppercase tracking-[0.28em] text-amber-100/80">Chip Balance</div>
@@ -92,7 +106,7 @@ export function GameBoard({
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <div>
             <div className="mb-2 text-xs uppercase tracking-[0.26em] text-slate-400">Current</div>
-            <CardFace card={currentCard} />
+            <CardFace card={currentCard} zenMode={zenMode} />
           </div>
           <div>
             <div className="mb-2 text-xs uppercase tracking-[0.26em] text-slate-400">Next</div>
@@ -101,10 +115,17 @@ export function GameBoard({
                 card={phase === "revealing" || phase === "result" ? revealCard : null}
                 hidden={phase !== "revealing" && phase !== "result"}
                 accent={phase === "result" && lastRound?.outcome === "win" ? "win" : phase === "result" && lastRound?.outcome === "loss" ? "loss" : undefined}
+                zenMode={zenMode}
               />
             </div>
           </div>
         </div>
+
+        {showFirstMoveHint && (
+          <div className="mt-4 rounded-xl border border-cyan-300/15 bg-cyan-400/5 px-3 py-2 text-sm text-cyan-100/90">
+            Pick HIGH or LOW to start.
+          </div>
+        )}
 
         <div className="mt-4 grid grid-cols-2 gap-3">
           <button
@@ -114,7 +135,11 @@ export function GameBoard({
             onClick={() => onChoose("high")}
             className={cn(
               "btn-press rounded-2xl border px-4 py-5 text-xl font-black tracking-wide sm:text-2xl",
-              canChooseHigh ? "border-cyan-300/30 bg-cyan-400/10 text-cyan-100 shadow-neon hover:bg-cyan-400/15" : "cursor-not-allowed border-white/10 bg-white/5 text-slate-500"
+              canChooseHigh
+                ? zenMode
+                  ? "border-cyan-300/20 bg-cyan-400/5 text-cyan-100 hover:bg-cyan-400/10"
+                  : "border-cyan-300/30 bg-cyan-400/10 text-cyan-100 shadow-neon hover:bg-cyan-400/15"
+                : "cursor-not-allowed border-white/10 bg-white/5 text-slate-500"
             )}
           >
             <span className="flex items-center justify-center gap-2">
@@ -134,7 +159,11 @@ export function GameBoard({
             onClick={() => onChoose("low")}
             className={cn(
               "btn-press rounded-2xl border px-4 py-5 text-xl font-black tracking-wide sm:text-2xl",
-              canChooseLow ? "border-pink-300/30 bg-pink-400/10 text-pink-100 shadow-pink hover:bg-pink-400/15" : "cursor-not-allowed border-white/10 bg-white/5 text-slate-500"
+              canChooseLow
+                ? zenMode
+                  ? "border-pink-300/20 bg-pink-400/5 text-pink-100 hover:bg-pink-400/10"
+                  : "border-pink-300/30 bg-pink-400/10 text-pink-100 shadow-pink hover:bg-pink-400/15"
+                : "cursor-not-allowed border-white/10 bg-white/5 text-slate-500"
             )}
           >
             <span className="flex items-center justify-center gap-2">
@@ -149,7 +178,7 @@ export function GameBoard({
           </button>
         </div>
 
-        {!canPlay && <div className="mt-3 text-xs text-slate-400">Place a valid bet to enable HIGH/LOW.</div>}
+        {!canPlay && <div className="mt-3 text-xs text-slate-400">Take your time. Set a valid bet to enable HIGH/LOW.</div>}
         {canPlay && currentCard?.rank === 1 && (
           <div className="mt-3 text-xs text-amber-200">Ace is low (A=1), so LOW is unavailable on this hand.</div>
         )}
@@ -158,7 +187,7 @@ export function GameBoard({
         )}
       </div>
 
-      <ResultBanner lastRound={lastRound} />
+      <ResultBanner lastRound={lastRound} zenMode={zenMode} />
     </section>
   );
 }

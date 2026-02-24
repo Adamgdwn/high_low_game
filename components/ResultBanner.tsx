@@ -1,17 +1,17 @@
 import type { RoundRecord } from "@/lib/types";
 import { cn, formatChips } from "@/lib/utils";
 
-export function ResultBanner({ lastRound }: { lastRound: RoundRecord | null }) {
+export function ResultBanner({ lastRound, zenMode = false }: { lastRound: RoundRecord | null; zenMode?: boolean }) {
   if (!lastRound) {
-    return <div className="panel px-4 py-3 text-sm text-slate-300">Place a bet and choose HIGH or LOW.</div>;
+    return <div className="panel px-4 py-3 text-sm text-slate-300">Take your time. Place a bet, then choose HIGH or LOW.</div>;
   }
 
   return (
     <div
       className={cn(
         "panel border px-4 py-3 text-sm",
-        lastRound.outcome === "win" && "pulse-win border-emerald-300/20",
-        lastRound.outcome === "loss" && "pulse-loss border-rose-300/20",
+        lastRound.outcome === "win" && `${zenMode ? "" : "pulse-win "}border-emerald-300/20`,
+        lastRound.outcome === "loss" && `${zenMode ? "" : "pulse-loss "}border-rose-300/20`,
         lastRound.outcome === "push" && "border-amber-300/20"
       )}
       role="status"

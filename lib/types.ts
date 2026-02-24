@@ -22,6 +22,7 @@ export interface PersistedState {
   mode: GameMode;
   fairDeckCount: 1 | 2 | 3;
   soundEnabled: boolean;
+  zenMode: boolean;
   reducedMotion: boolean;
   streak: number;
   lastBet: number;
