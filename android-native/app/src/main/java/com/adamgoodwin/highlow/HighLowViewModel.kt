@@ -20,6 +20,7 @@ import com.adamgoodwin.highlow.game.PlayerChoice
 import com.adamgoodwin.highlow.game.RoundRecord
 import com.adamgoodwin.highlow.game.ToastKind
 import com.adamgoodwin.highlow.game.UiToast
+import com.adamgoodwin.highlow.game.ZenMusicTrack
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -58,6 +59,12 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
     var soundEnabled by mutableStateOf(false)
         private set
     var zenMode by mutableStateOf(false)
+        private set
+    var zenMusicEnabled by mutableStateOf(false)
+        private set
+    var zenMusicTrack by mutableStateOf(ZenMusicTrack.CALM)
+        private set
+    var zenMusicVolume by mutableStateOf(35)
         private set
     var reducedMotion by mutableStateOf(false)
         private set
@@ -117,6 +124,7 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
             welcomeSeen = true
             persist()
         }
+        syncAudioProfile()
     }
 
     val canPlay: Boolean
@@ -208,6 +216,25 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
 
     fun changeZenMode(value: Boolean) {
         zenMode = value
+        syncAudioProfile()
+        persist()
+    }
+
+    fun changeZenMusicEnabled(value: Boolean) {
+        zenMusicEnabled = value
+        syncAudioProfile()
+        persist()
+    }
+
+    fun changeZenMusicTrack(value: ZenMusicTrack) {
+        zenMusicTrack = value
+        syncAudioProfile()
+        persist()
+    }
+
+    fun changeZenMusicVolume(value: Int) {
+        zenMusicVolume = value.coerceIn(0, 100)
+        syncAudioProfile()
         persist()
     }
 
@@ -477,6 +504,9 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
         fairDeckCount = saved.fairDeckCount.coerceIn(1, 3)
         soundEnabled = saved.soundEnabled
         zenMode = saved.zenMode
+        zenMusicEnabled = saved.zenMusicEnabled
+        zenMusicTrack = saved.zenMusicTrack
+        zenMusicVolume = saved.zenMusicVolume.coerceIn(0, 100)
         reducedMotion = saved.reducedMotion
         streak = saved.streak
         bet = saved.lastBet
@@ -485,6 +515,7 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
         authAccessToken = saved.authAccessToken
         welcomeSeen = saved.welcomeSeen
         debugOpen = saved.debugOpen
+        syncAudioProfile()
     }
 
     private fun currentPersistedState(): PersistedGameState {
@@ -494,6 +525,9 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
             fairDeckCount = fairDeckCount,
             soundEnabled = soundEnabled,
             zenMode = zenMode,
+            zenMusicEnabled = zenMusicEnabled,
+            zenMusicTrack = zenMusicTrack,
+            zenMusicVolume = zenMusicVolume,
             reducedMotion = reducedMotion,
             streak = streak,
             lastBet = bet,
@@ -582,6 +616,14 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
             delay(500)
             cloudClient.saveGameState(token, snapshot)
         }
+    }
+
+    private fun syncAudioProfile() {
+        soundPlayer.setZenMusic(
+            enabled = zenMode && zenMusicEnabled,
+            track = zenMusicTrack,
+            volume = zenMusicVolume
+        )
     }
 
     private fun emitToast(message: String, kind: ToastKind = ToastKind.INFO) {

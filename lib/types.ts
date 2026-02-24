@@ -3,6 +3,7 @@ export type TieBehavior = "push";
 export type PlayerChoice = "high" | "low";
 export type RoundOutcome = "win" | "loss" | "push";
 export type GamePhase = "idle" | "ready" | "choice" | "revealing" | "result";
+export type ZenMusicTrack = "calm" | "focus" | "night";
 export type Suit = "♠" | "♥" | "♦" | "♣";
 
 export interface Card {
@@ -23,6 +24,9 @@ export interface PersistedState {
   fairDeckCount: 1 | 2 | 3;
   soundEnabled: boolean;
   zenMode: boolean;
+  zenMusicEnabled: boolean;
+  zenMusicTrack: ZenMusicTrack;
+  zenMusicVolume: number;
   reducedMotion: boolean;
   streak: number;
   lastBet: number;

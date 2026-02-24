@@ -16,10 +16,10 @@ import {
   resolvePayout,
   shuffleDeck
 } from "@/lib/game-engine";
-import { playSound } from "@/lib/sound";
+import { playSound, setZenMusic } from "@/lib/sound";
 import { defaultPersistedState, loadPersistedState, savePersistedState } from "@/lib/storage";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
-import type { Card, GameMode, GamePhase, PlayerChoice, RoundRecord } from "@/lib/types";
+import type { Card, GameMode, GamePhase, PlayerChoice, RoundRecord, ZenMusicTrack } from "@/lib/types";
 import { usePrefersReducedMotion } from "@/lib/usePrefersReducedMotion";
 import { clamp, formatChips } from "@/lib/utils";
 import type { AuthChangeEvent, Session, SupabaseClient, User } from "@supabase/supabase-js";
@@ -78,6 +78,9 @@ export default function Page() {
   const [fairDeckCount, setFairDeckCount] = useState<1 | 2 | 3>(1);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [zenMode, setZenMode] = useState(false);
+  const [zenMusicEnabled, setZenMusicEnabled] = useState(false);
+  const [zenMusicTrack, setZenMusicTrack] = useState<ZenMusicTrack>("calm");
+  const [zenMusicVolume, setZenMusicVolume] = useState(35);
   const [reducedMotionManual, setReducedMotionManual] = useState(false);
   const [streak, setStreak] = useState(0);
   const [bet, setBet] = useState(100);
@@ -171,6 +174,9 @@ export default function Page() {
       fairDeckCount,
       soundEnabled,
       zenMode,
+      zenMusicEnabled,
+      zenMusicTrack,
+      zenMusicVolume,
       reducedMotion: reducedMotionManual,
       streak,
       lastBet: bet,
@@ -186,6 +192,9 @@ export default function Page() {
     setFairDeckCount(snapshot.fairDeckCount);
     setSoundEnabled(snapshot.soundEnabled);
     setZenMode(snapshot.zenMode);
+    setZenMusicEnabled(snapshot.zenMusicEnabled);
+    setZenMusicTrack(snapshot.zenMusicTrack);
+    setZenMusicVolume(snapshot.zenMusicVolume);
     setReducedMotionManual(snapshot.reducedMotion);
     setStreak(snapshot.streak);
     setBet(snapshot.lastBet);
@@ -234,6 +243,9 @@ export default function Page() {
     setFairDeckCount(saved.fairDeckCount);
     setSoundEnabled(saved.soundEnabled);
     setZenMode(saved.zenMode);
+    setZenMusicEnabled(saved.zenMusicEnabled);
+    setZenMusicTrack(saved.zenMusicTrack);
+    setZenMusicVolume(saved.zenMusicVolume);
     setReducedMotionManual(saved.reducedMotion);
     setStreak(saved.streak);
     setBet(saved.lastBet);
@@ -260,6 +272,9 @@ export default function Page() {
       fairDeckCount,
       soundEnabled,
       zenMode,
+      zenMusicEnabled,
+      zenMusicTrack,
+      zenMusicVolume,
       reducedMotion: reducedMotionManual,
       streak,
       lastBet: bet,
@@ -267,7 +282,19 @@ export default function Page() {
       welcomeSeen,
       debugOpen
     });
-  }, [hydrated, balance, mode, fairDeckCount, soundEnabled, zenMode, reducedMotionManual, streak, bet, borrowUsed, welcomeSeen, debugOpen]);
+  }, [hydrated, balance, mode, fairDeckCount, soundEnabled, zenMode, zenMusicEnabled, zenMusicTrack, zenMusicVolume, reducedMotionManual, streak, bet, borrowUsed, welcomeSeen, debugOpen]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    setZenMusic({
+      enabled: zenMode && zenMusicEnabled,
+      track: zenMusicTrack,
+      volume: zenMusicVolume
+    });
+    return () => {
+      setZenMusic({ enabled: false, track: zenMusicTrack, volume: zenMusicVolume });
+    };
+  }, [hydrated, zenMode, zenMusicEnabled, zenMusicTrack, zenMusicVolume]);
 
   useEffect(() => {
     if (!hydrated || welcomeSeen) return;
@@ -403,6 +430,9 @@ export default function Page() {
     fairDeckCount,
     soundEnabled,
     zenMode,
+    zenMusicEnabled,
+    zenMusicTrack,
+    zenMusicVolume,
     reducedMotionManual,
     streak,
     bet,
@@ -1022,12 +1052,18 @@ export default function Page() {
         fairDeckCount={fairDeckCount}
         soundEnabled={soundEnabled}
         zenMode={zenMode}
+        zenMusicEnabled={zenMusicEnabled}
+        zenMusicTrack={zenMusicTrack}
+        zenMusicVolume={zenMusicVolume}
         reducedMotion={reducedMotionManual}
         onClose={() => setSettingsOpen(false)}
         onModeChange={handleModeChange}
         onFairDeckCountChange={handleFairDeckCountChange}
         onSoundChange={setSoundEnabled}
         onZenModeChange={setZenMode}
+        onZenMusicEnabledChange={setZenMusicEnabled}
+        onZenMusicTrackChange={setZenMusicTrack}
+        onZenMusicVolumeChange={setZenMusicVolume}
         onReducedMotionChange={setReducedMotionManual}
       />
     </main>

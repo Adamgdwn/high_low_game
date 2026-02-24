@@ -4,6 +4,7 @@ enum class GameMode { FAIR, ALWAYS_WIN, ALWAYS_LOSE }
 enum class GamePhase { IDLE, READY, CHOICE, REVEALING, RESULT }
 enum class PlayerChoice { HIGH, LOW }
 enum class RoundOutcome { WIN, LOSS, PUSH }
+enum class ZenMusicTrack { CALM, FOCUS, NIGHT }
 
 data class Card(
     val id: String,
@@ -35,6 +36,9 @@ data class PersistedGameState(
     val fairDeckCount: Int = 1,
     val soundEnabled: Boolean = false,
     val zenMode: Boolean = false,
+    val zenMusicEnabled: Boolean = false,
+    val zenMusicTrack: ZenMusicTrack = ZenMusicTrack.CALM,
+    val zenMusicVolume: Int = 35,
     val reducedMotion: Boolean = false,
     val streak: Int = 0,
     val lastBet: Int = 100,

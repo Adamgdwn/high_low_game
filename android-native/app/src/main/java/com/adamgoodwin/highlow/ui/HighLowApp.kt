@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -50,6 +51,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -82,6 +84,7 @@ import com.adamgoodwin.highlow.game.GameMode
 import com.adamgoodwin.highlow.game.GamePhase
 import com.adamgoodwin.highlow.game.PlayerChoice
 import com.adamgoodwin.highlow.game.RoundOutcome
+import com.adamgoodwin.highlow.game.ZenMusicTrack
 import kotlinx.coroutines.flow.collectLatest
 
 @Composable
@@ -127,6 +130,9 @@ fun HighLowApp(viewModel: HighLowViewModel) {
                     fairDeckCount = viewModel.fairDeckCount,
                     soundEnabled = viewModel.soundEnabled,
                     zenMode = viewModel.zenMode,
+                    zenMusicEnabled = viewModel.zenMusicEnabled,
+                    zenMusicTrack = viewModel.zenMusicTrack,
+                    zenMusicVolume = viewModel.zenMusicVolume,
                     reducedMotion = viewModel.reducedMotion,
                     isSupabaseConfigured = viewModel.isSupabaseConfigured,
                     isSignedIn = viewModel.isSignedIn,
@@ -136,6 +142,9 @@ fun HighLowApp(viewModel: HighLowViewModel) {
                     onFairDeckCountChange = viewModel::changeFairDeckCount,
                     onSoundChange = viewModel::changeSoundEnabled,
                     onZenModeChange = viewModel::changeZenMode,
+                    onZenMusicEnabledChange = viewModel::changeZenMusicEnabled,
+                    onZenMusicTrackChange = viewModel::changeZenMusicTrack,
+                    onZenMusicVolumeChange = viewModel::changeZenMusicVolume,
                     onReducedMotionChange = viewModel::changeReducedMotion,
                     onOpenAuth = { authSheetOpen = true },
                     onSignOut = viewModel::signOutAccount,
@@ -887,6 +896,9 @@ private fun SettingsSheet(
     fairDeckCount: Int,
     soundEnabled: Boolean,
     zenMode: Boolean,
+    zenMusicEnabled: Boolean,
+    zenMusicTrack: ZenMusicTrack,
+    zenMusicVolume: Int,
     reducedMotion: Boolean,
     isSupabaseConfigured: Boolean,
     isSignedIn: Boolean,
@@ -896,6 +908,9 @@ private fun SettingsSheet(
     onFairDeckCountChange: (Int) -> Unit,
     onSoundChange: (Boolean) -> Unit,
     onZenModeChange: (Boolean) -> Unit,
+    onZenMusicEnabledChange: (Boolean) -> Unit,
+    onZenMusicTrackChange: (ZenMusicTrack) -> Unit,
+    onZenMusicVolumeChange: (Int) -> Unit,
     onReducedMotionChange: (Boolean) -> Unit,
     onOpenAuth: () -> Unit,
     onSignOut: () -> Unit,
@@ -905,6 +920,8 @@ private fun SettingsSheet(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .navigationBarsPadding()
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
@@ -942,6 +959,30 @@ private fun SettingsSheet(
 
         ToggleRow("Sound", soundEnabled, onSoundChange)
         ToggleRow("Zen mode", zenMode, onZenModeChange)
+        ToggleRow("Zen music", zenMusicEnabled, onZenMusicEnabledChange)
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Zen Audio Track", fontWeight = FontWeight.SemiBold)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                ZenTrackOption(ZenMusicTrack.CALM, zenMusicTrack, "Calm Drift", onZenMusicTrackChange)
+                ZenTrackOption(ZenMusicTrack.FOCUS, zenMusicTrack, "Focus Bloom", onZenMusicTrackChange)
+                ZenTrackOption(ZenMusicTrack.NIGHT, zenMusicTrack, "Night Float", onZenMusicTrackChange)
+            }
+            Text(
+                "Zen Music Volume: ${zenMusicVolume.coerceIn(0, 100)}%",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.8f)
+            )
+            Slider(
+                value = zenMusicVolume.coerceIn(0, 100).toFloat(),
+                onValueChange = { onZenMusicVolumeChange(it.toInt()) },
+                valueRange = 0f..100f
+            )
+            Text(
+                "Placeholder ambient synth loops. Best with Zen mode enabled.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.7f)
+            )
+        }
         ToggleRow("Reduced motion", reducedMotion, onReducedMotionChange)
 
         AuthCard(
@@ -990,6 +1031,15 @@ private fun SettingsSheet(
 
 @Composable
 private fun ModeOption(value: GameMode, selected: GameMode, label: String, onChange: (GameMode) -> Unit) {
+    FilterChip(
+        selected = selected == value,
+        onClick = { onChange(value) },
+        label = { Text(label) }
+    )
+}
+
+@Composable
+private fun ZenTrackOption(value: ZenMusicTrack, selected: ZenMusicTrack, label: String, onChange: (ZenMusicTrack) -> Unit) {
     FilterChip(
         selected = selected == value,
         onClick = { onChange(value) },

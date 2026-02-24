@@ -4,6 +4,7 @@ import android.util.Base64
 import com.adamgoodwin.highlow.BuildConfig
 import com.adamgoodwin.highlow.game.GameMode
 import com.adamgoodwin.highlow.game.PersistedGameState
+import com.adamgoodwin.highlow.game.ZenMusicTrack
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -102,6 +103,9 @@ class SupabaseGameProfileClient {
             .put("fairDeckCount", state.fairDeckCount.coerceIn(1, 3))
             .put("soundEnabled", state.soundEnabled)
             .put("zenMode", state.zenMode)
+            .put("zenMusicEnabled", state.zenMusicEnabled)
+            .put("zenMusicTrack", toWebZenTrackString(state.zenMusicTrack))
+            .put("zenMusicVolume", state.zenMusicVolume.coerceIn(0, 100))
             .put("reducedMotion", state.reducedMotion)
             .put("streak", state.streak.coerceAtLeast(0))
             .put("lastBet", state.lastBet.coerceAtLeast(0))
@@ -118,6 +122,9 @@ class SupabaseGameProfileClient {
             fairDeckCount = obj.optInt("fairDeckCount", 1).coerceIn(1, 3),
             soundEnabled = obj.optBoolean("soundEnabled", false),
             zenMode = obj.optBoolean("zenMode", false),
+            zenMusicEnabled = obj.optBoolean("zenMusicEnabled", false),
+            zenMusicTrack = parseZenTrack(obj.optString("zenMusicTrack", "calm")),
+            zenMusicVolume = obj.optInt("zenMusicVolume", 35).coerceIn(0, 100),
             reducedMotion = obj.optBoolean("reducedMotion", false),
             streak = obj.optInt("streak", 0).coerceAtLeast(0),
             lastBet = obj.optInt("lastBet", 100).coerceAtLeast(0),
@@ -143,6 +150,23 @@ class SupabaseGameProfileClient {
             GameMode.FAIR -> "fair"
             GameMode.ALWAYS_WIN -> "alwaysWin"
             GameMode.ALWAYS_LOSE -> "alwaysLose"
+        }
+    }
+
+    private fun parseZenTrack(value: String): ZenMusicTrack {
+        return when (value) {
+            "calm", "CALM" -> ZenMusicTrack.CALM
+            "focus", "FOCUS" -> ZenMusicTrack.FOCUS
+            "night", "NIGHT" -> ZenMusicTrack.NIGHT
+            else -> ZenMusicTrack.CALM
+        }
+    }
+
+    private fun toWebZenTrackString(track: ZenMusicTrack): String {
+        return when (track) {
+            ZenMusicTrack.CALM -> "calm"
+            ZenMusicTrack.FOCUS -> "focus"
+            ZenMusicTrack.NIGHT -> "night"
         }
     }
 

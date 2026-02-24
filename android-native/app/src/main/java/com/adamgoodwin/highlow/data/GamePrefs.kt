@@ -3,6 +3,7 @@ package com.adamgoodwin.highlow.data
 import android.content.Context
 import com.adamgoodwin.highlow.game.GameMode
 import com.adamgoodwin.highlow.game.PersistedGameState
+import com.adamgoodwin.highlow.game.ZenMusicTrack
 
 class GamePrefs(context: Context) {
     private val prefs = context.getSharedPreferences("high_low_native_prefs", Context.MODE_PRIVATE)
@@ -10,12 +11,17 @@ class GamePrefs(context: Context) {
     fun load(): PersistedGameState {
         val modeName = prefs.getString(KEY_MODE, GameMode.FAIR.name) ?: GameMode.FAIR.name
         val mode = runCatching { GameMode.valueOf(modeName) }.getOrDefault(GameMode.FAIR)
+        val zenTrackName = prefs.getString(KEY_ZEN_MUSIC_TRACK, ZenMusicTrack.CALM.name) ?: ZenMusicTrack.CALM.name
+        val zenTrack = runCatching { ZenMusicTrack.valueOf(zenTrackName) }.getOrDefault(ZenMusicTrack.CALM)
         return PersistedGameState(
             balance = prefs.getInt(KEY_BALANCE, 10_000),
             mode = mode,
             fairDeckCount = prefs.getInt(KEY_FAIR_DECK_COUNT, 1).coerceIn(1, 3),
             soundEnabled = prefs.getBoolean(KEY_SOUND, false),
             zenMode = prefs.getBoolean(KEY_ZEN_MODE, false),
+            zenMusicEnabled = prefs.getBoolean(KEY_ZEN_MUSIC_ENABLED, false),
+            zenMusicTrack = zenTrack,
+            zenMusicVolume = prefs.getInt(KEY_ZEN_MUSIC_VOLUME, 35).coerceIn(0, 100),
             reducedMotion = prefs.getBoolean(KEY_REDUCED_MOTION, false),
             streak = prefs.getInt(KEY_STREAK, 0),
             lastBet = prefs.getInt(KEY_LAST_BET, 100),
@@ -34,6 +40,9 @@ class GamePrefs(context: Context) {
             .putInt(KEY_FAIR_DECK_COUNT, state.fairDeckCount.coerceIn(1, 3))
             .putBoolean(KEY_SOUND, state.soundEnabled)
             .putBoolean(KEY_ZEN_MODE, state.zenMode)
+            .putBoolean(KEY_ZEN_MUSIC_ENABLED, state.zenMusicEnabled)
+            .putString(KEY_ZEN_MUSIC_TRACK, state.zenMusicTrack.name)
+            .putInt(KEY_ZEN_MUSIC_VOLUME, state.zenMusicVolume.coerceIn(0, 100))
             .putBoolean(KEY_REDUCED_MOTION, state.reducedMotion)
             .putInt(KEY_STREAK, state.streak)
             .putInt(KEY_LAST_BET, state.lastBet)
@@ -51,6 +60,9 @@ class GamePrefs(context: Context) {
         const val KEY_FAIR_DECK_COUNT = "fairDeckCount"
         const val KEY_SOUND = "soundEnabled"
         const val KEY_ZEN_MODE = "zenMode"
+        const val KEY_ZEN_MUSIC_ENABLED = "zenMusicEnabled"
+        const val KEY_ZEN_MUSIC_TRACK = "zenMusicTrack"
+        const val KEY_ZEN_MUSIC_VOLUME = "zenMusicVolume"
         const val KEY_REDUCED_MOTION = "reducedMotion"
         const val KEY_STREAK = "streak"
         const val KEY_LAST_BET = "lastBet"

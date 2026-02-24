@@ -1,4 +1,4 @@
-import type { GameMode } from "@/lib/types";
+import type { GameMode, ZenMusicTrack } from "@/lib/types";
 
 interface SettingsModalProps {
   open: boolean;
@@ -6,12 +6,18 @@ interface SettingsModalProps {
   fairDeckCount: 1 | 2 | 3;
   soundEnabled: boolean;
   zenMode: boolean;
+  zenMusicEnabled: boolean;
+  zenMusicTrack: ZenMusicTrack;
+  zenMusicVolume: number;
   reducedMotion: boolean;
   onClose: () => void;
   onModeChange: (mode: GameMode) => void;
   onFairDeckCountChange: (count: 1 | 2 | 3) => void;
   onSoundChange: (value: boolean) => void;
   onZenModeChange: (value: boolean) => void;
+  onZenMusicEnabledChange: (value: boolean) => void;
+  onZenMusicTrackChange: (value: ZenMusicTrack) => void;
+  onZenMusicVolumeChange: (value: number) => void;
   onReducedMotionChange: (value: boolean) => void;
 }
 
@@ -39,12 +45,18 @@ export function SettingsModal({
   fairDeckCount,
   soundEnabled,
   zenMode,
+  zenMusicEnabled,
+  zenMusicTrack,
+  zenMusicVolume,
   reducedMotion,
   onClose,
   onModeChange,
   onFairDeckCountChange,
   onSoundChange,
   onZenModeChange,
+  onZenMusicEnabledChange,
+  onZenMusicTrackChange,
+  onZenMusicVolumeChange,
   onReducedMotionChange
 }: SettingsModalProps) {
   if (!open) return null;
@@ -99,6 +111,37 @@ export function SettingsModal({
 
           <Toggle label="Sound" checked={soundEnabled} onChange={onSoundChange} />
           <Toggle label="Zen mode" checked={zenMode} onChange={onZenModeChange} />
+          <Toggle label="Zen music" checked={zenMusicEnabled} onChange={onZenMusicEnabledChange} />
+          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+            <label className="mb-2 block text-sm font-semibold text-slate-100" htmlFor="zen-track">Zen Track</label>
+            <select
+              id="zen-track"
+              value={zenMusicTrack}
+              onChange={(e) => onZenMusicTrackChange(e.target.value as ZenMusicTrack)}
+              className="w-full rounded-lg border border-white/10 bg-slate-900/80 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-cyan-300"
+            >
+              <option value="calm">Calm Drift</option>
+              <option value="focus">Focus Bloom</option>
+              <option value="night">Night Float</option>
+            </select>
+            <div className="mt-3">
+              <div className="mb-1 flex items-center justify-between text-xs text-slate-300">
+                <span>Zen Music Volume</span>
+                <span>{zenMusicVolume}%</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={1}
+                value={zenMusicVolume}
+                onChange={(e) => onZenMusicVolumeChange(Number(e.target.value))}
+                aria-label="Zen music volume"
+                className="w-full accent-cyan-300"
+              />
+            </div>
+            <p className="mt-2 text-xs text-slate-400">Placeholder ambient synth loops. Best with Zen mode on.</p>
+          </div>
           <Toggle label="Reduced motion" checked={reducedMotion} onChange={onReducedMotionChange} />
 
           <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-slate-300">
