@@ -128,11 +128,25 @@ fun HighLowApp(viewModel: HighLowViewModel) {
                     soundEnabled = viewModel.soundEnabled,
                     zenMode = viewModel.zenMode,
                     reducedMotion = viewModel.reducedMotion,
+                    isSupabaseConfigured = viewModel.isSupabaseConfigured,
+                    isSignedIn = viewModel.isSignedIn,
+                    signedInEmail = viewModel.authEmail,
+                    authBusy = viewModel.authBusy,
                     onModeChange = viewModel::changeMode,
                     onFairDeckCountChange = viewModel::changeFairDeckCount,
                     onSoundChange = viewModel::changeSoundEnabled,
                     onZenModeChange = viewModel::changeZenMode,
                     onReducedMotionChange = viewModel::changeReducedMotion,
+                    onOpenAuth = { authSheetOpen = true },
+                    onSignOut = viewModel::signOutAccount,
+                    onShare = {
+                        val intent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_SUBJECT, "Try this High / Low game")
+                            putExtra(Intent.EXTRA_TEXT, "Play this Vegas-style High / Low game: https://highlowgame.vercel.app")
+                        }
+                        context.startActivity(Intent.createChooser(intent, "Share app"))
+                    },
                     onClose = { settingsOpen = false }
                 )
             }
@@ -209,22 +223,24 @@ fun HighLowApp(viewModel: HighLowViewModel) {
 
                 BalanceCard(balance = viewModel.balance)
 
-                AuthCard(
-                    isConfigured = viewModel.isSupabaseConfigured,
-                    isSignedIn = viewModel.isSignedIn,
-                    signedInEmail = viewModel.authEmail,
-                    authBusy = viewModel.authBusy,
-                    onOpenAuth = { authSheetOpen = true },
-                    onSignOut = viewModel::signOutAccount,
-                    onShare = {
-                        val intent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_SUBJECT, "Try this High / Low game")
-                            putExtra(Intent.EXTRA_TEXT, "Play this Vegas-style High / Low game: https://highlowgame.vercel.app")
-                        }
-                        context.startActivity(Intent.createChooser(intent, "Share app"))
-                    }
+                BetControls(
+                    balance = viewModel.balance,
+                    bet = viewModel.bet,
+                    onQuickBet = viewModel::updateBet,
+                    onAddBet = viewModel::addBet,
+                    onSetBetText = { raw -> viewModel.updateBet(raw.toIntOrNull() ?: 0) },
+                    onMax = viewModel::setMaxBet,
+                    onClear = viewModel::clearBet
                 )
+
+                if (viewModel.needsRecovery) {
+                    RecoveryCard(
+                        minBet = GameEngine.minBet,
+                        canBorrow = viewModel.canBorrow,
+                        onBorrow = viewModel::borrowChipsOnce,
+                        onNewGame = viewModel::resetTable
+                    )
+                }
 
                 MiniGoalCard(
                     label = viewModel.activeSessionGoalLabel,
@@ -264,25 +280,6 @@ fun HighLowApp(viewModel: HighLowViewModel) {
                 }
 
                 ResultBanner(viewModel.lastRound)
-
-                BetControls(
-                    balance = viewModel.balance,
-                    bet = viewModel.bet,
-                    onQuickBet = viewModel::updateBet,
-                    onAddBet = viewModel::addBet,
-                    onSetBetText = { raw -> viewModel.updateBet(raw.toIntOrNull() ?: 0) },
-                    onMax = viewModel::setMaxBet,
-                    onClear = viewModel::clearBet
-                )
-
-                if (viewModel.needsRecovery) {
-                    RecoveryCard(
-                        minBet = GameEngine.minBet,
-                        canBorrow = viewModel.canBorrow,
-                        onBorrow = viewModel::borrowChipsOnce,
-                        onNewGame = viewModel::resetTable
-                    )
-                }
 
                 QuickHelpCard()
 
@@ -891,11 +888,18 @@ private fun SettingsSheet(
     soundEnabled: Boolean,
     zenMode: Boolean,
     reducedMotion: Boolean,
+    isSupabaseConfigured: Boolean,
+    isSignedIn: Boolean,
+    signedInEmail: String?,
+    authBusy: Boolean,
     onModeChange: (GameMode) -> Unit,
     onFairDeckCountChange: (Int) -> Unit,
     onSoundChange: (Boolean) -> Unit,
     onZenModeChange: (Boolean) -> Unit,
     onReducedMotionChange: (Boolean) -> Unit,
+    onOpenAuth: () -> Unit,
+    onSignOut: () -> Unit,
+    onShare: () -> Unit,
     onClose: () -> Unit
 ) {
     Column(
@@ -939,6 +943,16 @@ private fun SettingsSheet(
         ToggleRow("Sound", soundEnabled, onSoundChange)
         ToggleRow("Zen mode", zenMode, onZenModeChange)
         ToggleRow("Reduced motion", reducedMotion, onReducedMotionChange)
+
+        AuthCard(
+            isConfigured = isSupabaseConfigured,
+            isSignedIn = isSignedIn,
+            signedInEmail = signedInEmail,
+            authBusy = authBusy,
+            onOpenAuth = onOpenAuth,
+            onSignOut = onSignOut,
+            onShare = onShare
+        )
 
         Card(colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.04f))) {
             Text(

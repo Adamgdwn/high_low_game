@@ -9,6 +9,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.adamgoodwin.highlow.audio.SoundPlayer
 import com.adamgoodwin.highlow.auth.SupabaseAuthClient
+import com.adamgoodwin.highlow.auth.SupabaseGameProfileClient
 import com.adamgoodwin.highlow.data.GamePrefs
 import com.adamgoodwin.highlow.game.Card
 import com.adamgoodwin.highlow.game.GameEngine
@@ -20,6 +21,7 @@ import com.adamgoodwin.highlow.game.RoundRecord
 import com.adamgoodwin.highlow.game.ToastKind
 import com.adamgoodwin.highlow.game.UiToast
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
@@ -42,6 +44,8 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
     private val prefs = GamePrefs(app)
     private val soundPlayer = SoundPlayer()
     private val authClient = SupabaseAuthClient()
+    private val cloudClient = SupabaseGameProfileClient()
+    private var cloudSaveJob: Job? = null
 
     private var deck: List<Card> = emptyList()
 
@@ -104,6 +108,9 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
         deck = start.deck
         currentCard = start.current
         phase = if (bet >= GameEngine.minBet) GamePhase.READY else GamePhase.IDLE
+        if (isSignedIn && isSupabaseConfigured) {
+            restoreCloudProgressOnLaunch()
+        }
 
         if (!welcomeSeen) {
             emitToast("Welcome. Start with 10,000 chips and take your time.", ToastKind.INFO)
@@ -255,13 +262,13 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
         authBusy = true
         viewModelScope.launch {
             val result = authClient.signIn(cleanEmail, password)
-            authBusy = false
             if (result.success) {
                 authEmail = result.email ?: cleanEmail
                 authAccessToken = result.accessToken
-                emitToast(result.message, ToastKind.SUCCESS)
-                persist()
+                persist(pushCloud = false)
+                syncCloudAfterAuth(result.message)
             } else {
+                authBusy = false
                 emitToast(result.message, ToastKind.ERROR)
             }
         }
@@ -277,16 +284,19 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
         authBusy = true
         viewModelScope.launch {
             val result = authClient.signUp(cleanEmail, password)
-            authBusy = false
             if (result.success) {
                 if (!result.email.isNullOrBlank()) authEmail = result.email
                 if (!result.accessToken.isNullOrBlank()) authAccessToken = result.accessToken
-                emitToast(
-                    result.message,
-                    if (result.accessToken.isNullOrBlank()) ToastKind.INFO else ToastKind.SUCCESS
-                )
-                persist()
+                if (!result.accessToken.isNullOrBlank()) {
+                    persist(pushCloud = false)
+                    syncCloudAfterAuth(result.message)
+                } else {
+                    authBusy = false
+                    emitToast(result.message, ToastKind.INFO)
+                    persist(pushCloud = false)
+                }
             } else {
+                authBusy = false
                 emitToast(result.message, ToastKind.ERROR)
             }
         }
@@ -309,6 +319,7 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
 
     fun signOutAccount() {
         val token = authAccessToken
+        cloudSaveJob?.cancel()
         if (authBusy || token.isNullOrBlank()) {
             authAccessToken = null
             authEmail = null
@@ -476,24 +487,101 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
         debugOpen = saved.debugOpen
     }
 
-    private fun persist() {
-        prefs.save(
-            PersistedGameState(
-                balance = balance,
-                mode = mode,
-                fairDeckCount = fairDeckCount,
-                soundEnabled = soundEnabled,
-                zenMode = zenMode,
-                reducedMotion = reducedMotion,
-                streak = streak,
-                lastBet = bet,
-                borrowUsed = borrowUsed,
-                authEmail = authEmail,
-                authAccessToken = authAccessToken,
-                welcomeSeen = welcomeSeen,
-                debugOpen = debugOpen
+    private fun currentPersistedState(): PersistedGameState {
+        return PersistedGameState(
+            balance = balance,
+            mode = mode,
+            fairDeckCount = fairDeckCount,
+            soundEnabled = soundEnabled,
+            zenMode = zenMode,
+            reducedMotion = reducedMotion,
+            streak = streak,
+            lastBet = bet,
+            borrowUsed = borrowUsed,
+            authEmail = authEmail,
+            authAccessToken = authAccessToken,
+            welcomeSeen = welcomeSeen,
+            debugOpen = debugOpen
+        )
+    }
+
+    private fun persist(pushCloud: Boolean = true) {
+        prefs.save(currentPersistedState())
+        if (pushCloud) queueCloudSave()
+    }
+
+    private fun restoreCloudProgressOnLaunch() {
+        viewModelScope.launch {
+            loadCloudProgress(seedCloudIfMissing = false, showLoadedToast = true)
+        }
+    }
+
+    private suspend fun syncCloudAfterAuth(authMessage: String) {
+        val hadRemote = loadCloudProgress(seedCloudIfMissing = true, showLoadedToast = false)
+        authBusy = false
+        emitToast(
+            if (hadRemote) "$authMessage. Cloud progress loaded." else "$authMessage. Cloud sync ready.",
+            ToastKind.SUCCESS
+        )
+    }
+
+    private suspend fun loadCloudProgress(seedCloudIfMissing: Boolean, showLoadedToast: Boolean): Boolean {
+        val token = authAccessToken
+        if (token.isNullOrBlank() || !cloudClient.isConfigured()) return false
+
+        val result = cloudClient.loadGameState(token)
+        if (!result.success) {
+            emitToast("Cloud sync error: ${result.message}", ToastKind.WARNING)
+            return false
+        }
+
+        val remote = result.state
+        if (remote != null) {
+            applyCloudState(remote)
+            persist(pushCloud = false)
+            if (showLoadedToast) emitToast("Cloud progress loaded", ToastKind.INFO)
+            return true
+        }
+
+        if (seedCloudIfMissing) {
+            val save = cloudClient.saveGameState(token, currentPersistedState())
+            if (!save.success) {
+                emitToast("Cloud save error: ${save.message}", ToastKind.WARNING)
+            }
+        }
+        return false
+    }
+
+    private fun applyCloudState(remote: PersistedGameState) {
+        val keepAuthEmail = authEmail
+        val keepAuthToken = authAccessToken
+        applyPersisted(
+            remote.copy(
+                authEmail = keepAuthEmail,
+                authAccessToken = keepAuthToken
             )
         )
+
+        // Current/reveal cards and deck are local session details. Rebuild a fresh round using the loaded settings.
+        revealCard = null
+        pendingChoice = null
+        lastRound = null
+        roundHistory.clear()
+        val start = GameEngine.drawCurrentCard(GameEngine.shuffleDeck(GameEngine.createDeck(fairDeckCount)), mode)
+        deck = start.deck
+        currentCard = start.current
+        phase = if (balance > 0 && bet >= GameEngine.minBet) GamePhase.READY else GamePhase.IDLE
+    }
+
+    private fun queueCloudSave() {
+        val token = authAccessToken
+        if (token.isNullOrBlank() || !cloudClient.isConfigured()) return
+        val snapshot = currentPersistedState()
+        cloudSaveJob?.cancel()
+        cloudSaveJob = viewModelScope.launch {
+            delay(500)
+            cloudClient.saveGameState(token, snapshot)
+        }
     }
 
     private fun emitToast(message: String, kind: ToastKind = ToastKind.INFO) {
