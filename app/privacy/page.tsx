@@ -54,6 +54,12 @@ export default function PrivacyPage() {
               gameplay settings and progress to sync across devices.
             </p>
             <p>
+              To request deletion of account/cloud-synced data, visit{" "}
+              <Link href="/data-deletion" className="underline decoration-cyan-200/60 underline-offset-2 hover:text-cyan-100">
+                Data Deletion Request
+              </Link>.
+            </p>
+            <p>
               We do not process real-money payments, payouts, or cash-out information for this app.
             </p>
           </section>
@@ -96,4 +102,3 @@ export default function PrivacyPage() {
     </main>
   );
 }
-

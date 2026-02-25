@@ -1046,9 +1046,14 @@ export default function Page() {
       <footer className="mt-5 rounded-xl border border-amber-300/20 bg-amber-400/10 px-4 py-3 text-xs text-amber-100">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span>Social casino demo only. Chips have no cash value. No cash out. No prizes or gift cards.</span>
-          <Link href="/privacy" className="underline decoration-amber-200/60 underline-offset-2 hover:text-amber-50">
-            Privacy Policy
-          </Link>
+          <div className="flex flex-wrap items-center gap-3">
+            <Link href="/privacy" className="underline decoration-amber-200/60 underline-offset-2 hover:text-amber-50">
+              Privacy Policy
+            </Link>
+            <Link href="/data-deletion" className="underline decoration-amber-200/60 underline-offset-2 hover:text-amber-50">
+              Data Deletion Request
+            </Link>
+          </div>
         </div>
       </footer>
 
