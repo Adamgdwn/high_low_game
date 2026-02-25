@@ -978,7 +978,7 @@ private fun SettingsSheet(
                 valueRange = 0f..100f
             )
             Text(
-                "Placeholder ambient synth loops. Best with Zen mode enabled.",
+                "Uses bundled zen loop files when available, otherwise falls back to placeholder ambience.",
                 style = MaterialTheme.typography.bodySmall,
                 color = Color.White.copy(alpha = 0.7f)
             )

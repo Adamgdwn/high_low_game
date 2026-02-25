@@ -43,7 +43,7 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
     )
 
     private val prefs = GamePrefs(app)
-    private val soundPlayer = SoundPlayer()
+    private val soundPlayer = SoundPlayer(app.applicationContext)
     private val authClient = SupabaseAuthClient()
     private val cloudClient = SupabaseGameProfileClient()
     private var cloudSaveJob: Job? = null

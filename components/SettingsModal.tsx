@@ -140,7 +140,7 @@ export function SettingsModal({
                 className="w-full accent-cyan-300"
               />
             </div>
-            <p className="mt-2 text-xs text-slate-400">Placeholder ambient synth loops. Best with Zen mode on.</p>
+            <p className="mt-2 text-xs text-slate-400">Uses bundled zen loop files when available, otherwise falls back to placeholder synth ambience.</p>
           </div>
           <Toggle label="Reduced motion" checked={reducedMotion} onChange={onReducedMotionChange} />
 
