@@ -45,6 +45,7 @@ data class PersistedGameState(
     val borrowUsed: Boolean = false,
     val authEmail: String? = null,
     val authAccessToken: String? = null,
+    val authRefreshToken: String? = null,
     val welcomeSeen: Boolean = false,
     val debugOpen: Boolean = false
 )

@@ -13,7 +13,8 @@ data class AuthResult(
     val success: Boolean,
     val message: String,
     val email: String? = null,
-    val accessToken: String? = null
+    val accessToken: String? = null,
+    val refreshToken: String? = null
 )
 
 class SupabaseAuthClient {
@@ -32,10 +33,11 @@ class SupabaseAuthClient {
         val obj = JSONObject(json.message)
         val userEmail = obj.optJSONObject("user")?.optString("email")
         val accessToken = obj.optString("access_token", null)
+        val refreshToken = obj.optString("refresh_token", null)
         if (accessToken.isNullOrBlank()) {
             AuthResult(true, "Account created. Check email to confirm, then sign in.", userEmail, null)
         } else {
-            AuthResult(true, "Account created and signed in", userEmail, accessToken)
+            AuthResult(true, "Account created and signed in", userEmail, accessToken, refreshToken)
         }
     }
 
@@ -49,8 +51,22 @@ class SupabaseAuthClient {
         val obj = JSONObject(json.message)
         val userEmail = obj.optJSONObject("user")?.optString("email") ?: email
         val accessToken = obj.optString("access_token", null)
+        val refreshToken = obj.optString("refresh_token", null)
         if (accessToken.isNullOrBlank()) return@withContext AuthResult(false, "Missing access token")
-        AuthResult(true, "Signed in", userEmail, accessToken)
+        AuthResult(true, "Signed in", userEmail, accessToken, refreshToken)
+    }
+
+    suspend fun refreshSession(refreshToken: String): AuthResult = withContext(Dispatchers.IO) {
+        if (!isConfigured()) return@withContext AuthResult(false, "Supabase not configured")
+        val body = JSONObject().put("refresh_token", refreshToken)
+        val json = postJson("$urlBase/auth/v1/token?grant_type=refresh_token", body.toString())
+        if (!json.success) return@withContext json
+        val obj = JSONObject(json.message)
+        val userEmail = obj.optJSONObject("user")?.optString("email")
+        val nextAccessToken = obj.optString("access_token", null)
+        val nextRefreshToken = obj.optString("refresh_token", null)
+        if (nextAccessToken.isNullOrBlank()) return@withContext AuthResult(false, "Missing access token")
+        AuthResult(true, "Session refreshed", userEmail, nextAccessToken, nextRefreshToken)
     }
 
     suspend fun signOut(accessToken: String): AuthResult = withContext(Dispatchers.IO) {

@@ -58,6 +58,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -123,6 +124,7 @@ fun HighLowApp(viewModel: HighLowViewModel) {
         if (settingsOpen) {
             ModalBottomSheet(
                 onDismissRequest = { settingsOpen = false },
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
                 containerColor = MaterialTheme.colorScheme.surface
             ) {
                 SettingsSheet(
@@ -164,6 +166,7 @@ fun HighLowApp(viewModel: HighLowViewModel) {
         if (authSheetOpen && viewModel.isSupabaseConfigured && !viewModel.isSignedIn) {
             ModalBottomSheet(
                 onDismissRequest = { if (!viewModel.authBusy) authSheetOpen = false },
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
                 containerColor = MaterialTheme.colorScheme.surface
             ) {
                 AuthSheet(
@@ -220,6 +223,7 @@ fun HighLowApp(viewModel: HighLowViewModel) {
                         )
                     )
                     .padding(padding)
+                    .navigationBarsPadding()
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -250,14 +254,6 @@ fun HighLowApp(viewModel: HighLowViewModel) {
                         onNewGame = viewModel::resetTable
                     )
                 }
-
-                MiniGoalCard(
-                    label = viewModel.activeSessionGoalLabel,
-                    targetLabel = viewModel.activeSessionGoalTargetLabel,
-                    progress = viewModel.activeSessionGoalProgress,
-                    target = viewModel.activeSessionGoalTarget,
-                    percent = viewModel.activeSessionGoalPercent
-                )
 
                 GameCardsArea(
                     currentCard = viewModel.currentCard,
@@ -290,6 +286,14 @@ fun HighLowApp(viewModel: HighLowViewModel) {
 
                 ResultBanner(viewModel.lastRound)
 
+                MiniGoalCard(
+                    label = viewModel.activeSessionGoalLabel,
+                    targetLabel = viewModel.activeSessionGoalTargetLabel,
+                    progress = viewModel.activeSessionGoalProgress,
+                    target = viewModel.activeSessionGoalTarget,
+                    percent = viewModel.activeSessionGoalPercent
+                )
+
                 QuickHelpCard()
 
                 AnimatedVisibility(visible = viewModel.debugOpen) {
@@ -297,6 +301,7 @@ fun HighLowApp(viewModel: HighLowViewModel) {
                 }
 
                 DisclaimerFooter()
+                Spacer(Modifier.height(12.dp))
             }
         }
     }

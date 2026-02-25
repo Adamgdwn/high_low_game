@@ -28,6 +28,7 @@ class GamePrefs(context: Context) {
             borrowUsed = prefs.getBoolean(KEY_BORROW_USED, false),
             authEmail = prefs.getString(KEY_AUTH_EMAIL, null),
             authAccessToken = prefs.getString(KEY_AUTH_ACCESS_TOKEN, null),
+            authRefreshToken = prefs.getString(KEY_AUTH_REFRESH_TOKEN, null),
             welcomeSeen = prefs.getBoolean(KEY_WELCOME_SEEN, false),
             debugOpen = prefs.getBoolean(KEY_DEBUG_OPEN, false)
         )
@@ -49,6 +50,7 @@ class GamePrefs(context: Context) {
             .putBoolean(KEY_BORROW_USED, state.borrowUsed)
             .putString(KEY_AUTH_EMAIL, state.authEmail)
             .putString(KEY_AUTH_ACCESS_TOKEN, state.authAccessToken)
+            .putString(KEY_AUTH_REFRESH_TOKEN, state.authRefreshToken)
             .putBoolean(KEY_WELCOME_SEEN, state.welcomeSeen)
             .putBoolean(KEY_DEBUG_OPEN, state.debugOpen)
             .apply()
@@ -69,6 +71,7 @@ class GamePrefs(context: Context) {
         const val KEY_BORROW_USED = "borrowUsed"
         const val KEY_AUTH_EMAIL = "authEmail"
         const val KEY_AUTH_ACCESS_TOKEN = "authAccessToken"
+        const val KEY_AUTH_REFRESH_TOKEN = "authRefreshToken"
         const val KEY_WELCOME_SEEN = "welcomeSeen"
         const val KEY_DEBUG_OPEN = "debugOpen"
     }

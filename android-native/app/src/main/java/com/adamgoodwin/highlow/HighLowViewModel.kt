@@ -78,6 +78,8 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var authAccessToken by mutableStateOf<String?>(null)
         private set
+    var authRefreshToken by mutableStateOf<String?>(null)
+        private set
     var authBusy by mutableStateOf(false)
         private set
     var welcomeSeen by mutableStateOf(false)
@@ -292,6 +294,7 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
             if (result.success) {
                 authEmail = result.email ?: cleanEmail
                 authAccessToken = result.accessToken
+                authRefreshToken = result.refreshToken
                 persist(pushCloud = false)
                 syncCloudAfterAuth(result.message)
             } else {
@@ -314,6 +317,7 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
             if (result.success) {
                 if (!result.email.isNullOrBlank()) authEmail = result.email
                 if (!result.accessToken.isNullOrBlank()) authAccessToken = result.accessToken
+                if (!result.refreshToken.isNullOrBlank()) authRefreshToken = result.refreshToken
                 if (!result.accessToken.isNullOrBlank()) {
                     persist(pushCloud = false)
                     syncCloudAfterAuth(result.message)
@@ -349,6 +353,7 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
         cloudSaveJob?.cancel()
         if (authBusy || token.isNullOrBlank()) {
             authAccessToken = null
+            authRefreshToken = null
             authEmail = null
             persist()
             return
@@ -358,6 +363,7 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
             val result = authClient.signOut(token)
             authBusy = false
             authAccessToken = null
+            authRefreshToken = null
             authEmail = null
             persist()
             emitToast(
@@ -513,6 +519,7 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
         borrowUsed = saved.borrowUsed
         authEmail = saved.authEmail
         authAccessToken = saved.authAccessToken
+        authRefreshToken = saved.authRefreshToken
         welcomeSeen = saved.welcomeSeen
         debugOpen = saved.debugOpen
         syncAudioProfile()
@@ -534,6 +541,7 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
             borrowUsed = borrowUsed,
             authEmail = authEmail,
             authAccessToken = authAccessToken,
+            authRefreshToken = authRefreshToken,
             welcomeSeen = welcomeSeen,
             debugOpen = debugOpen
         )
@@ -565,7 +573,10 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
 
         val result = cloudClient.loadGameState(token)
         if (!result.success) {
-            emitToast("Cloud sync error: ${result.message}", ToastKind.WARNING)
+            if (result.message.contains("JWT expired", ignoreCase = true) && refreshAuthSession()) {
+                return loadCloudProgress(seedCloudIfMissing = seedCloudIfMissing, showLoadedToast = showLoadedToast)
+            }
+            emitToast("Cloud sync error: ${result.message}", ToastKind.ERROR)
             return false
         }
 
@@ -580,7 +591,7 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
         if (seedCloudIfMissing) {
             val save = cloudClient.saveGameState(token, currentPersistedState())
             if (!save.success) {
-                emitToast("Cloud save error: ${save.message}", ToastKind.WARNING)
+                emitToast("Cloud save error: ${save.message}", ToastKind.ERROR)
             }
         }
         return false
@@ -589,10 +600,12 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
     private fun applyCloudState(remote: PersistedGameState) {
         val keepAuthEmail = authEmail
         val keepAuthToken = authAccessToken
+        val keepRefreshToken = authRefreshToken
         applyPersisted(
             remote.copy(
                 authEmail = keepAuthEmail,
-                authAccessToken = keepAuthToken
+                authAccessToken = keepAuthToken,
+                authRefreshToken = keepRefreshToken
             )
         )
 
@@ -614,8 +627,30 @@ class HighLowViewModel(app: Application) : AndroidViewModel(app) {
         cloudSaveJob?.cancel()
         cloudSaveJob = viewModelScope.launch {
             delay(500)
-            cloudClient.saveGameState(token, snapshot)
+            var result = cloudClient.saveGameState(token, snapshot)
+            if (!result.success && result.message.contains("JWT expired", ignoreCase = true) && refreshAuthSession()) {
+                val refreshed = authAccessToken
+                if (!refreshed.isNullOrBlank()) {
+                    result = cloudClient.saveGameState(refreshed, snapshot)
+                }
+            }
+            if (!result.success) {
+                emitToast("Cloud save error: ${result.message}", ToastKind.ERROR)
+            }
         }
+    }
+
+    private suspend fun refreshAuthSession(): Boolean {
+        val refreshToken = authRefreshToken
+        if (refreshToken.isNullOrBlank()) return false
+        val refreshed = authClient.refreshSession(refreshToken)
+        if (!refreshed.success || refreshed.accessToken.isNullOrBlank()) return false
+        authAccessToken = refreshed.accessToken
+        if (!refreshed.refreshToken.isNullOrBlank()) authRefreshToken = refreshed.refreshToken
+        if (!refreshed.email.isNullOrBlank()) authEmail = refreshed.email
+        persist(pushCloud = false)
+        emitToast("Session refreshed", ToastKind.INFO)
+        return true
     }
 
     private fun syncAudioProfile() {
